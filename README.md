@@ -42,7 +42,7 @@ ovr.py
 
 
 
-### 3.在线测试：online
+### 3.测试：online
 
 输入：网卡端口
 
@@ -51,10 +51,9 @@ ovr.py
 编译后运行
 
 ```
-sudo ./Bin/TLSFingerprinting -i ens160(目标端口)
+sudo ./Bin/TLSFingerprinting -r "file-path"
 ```
 
-暂时目标端口未开启DPDK支持，未来将device升级为DPDKdevice即可
 
 具体文件包括Src与Inc中的所有文件
 
