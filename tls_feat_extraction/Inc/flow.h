@@ -201,7 +201,7 @@ struct ProtocolInfo {
     uint16_t ethernet_type = 0; 
     int vlan_id = 1; 
     int mpls_label = 0; 
-    int pppoe_session_id = 0; 
+    uint16_t pppoe_session_id = 0; 
 
 	std::string protocol_type = "TCP";
     std::string ip_version = "IPv4";
@@ -228,7 +228,7 @@ struct ProtocolInfo {
     int icmp_code = 0;
     bool arp_request; 
     bool arp_reply; 
-    pcpp::DnsType dns_query_type;
+    std::vector<pcpp::DnsType> dns_query_type;
 
     std::string smtp_command;
     std::string dhcp_message_type;
@@ -261,7 +261,6 @@ public:
 	void updateFeature(RawPacket* pkt);
 	void addPacket(RawPacket* pkt);
 	void terminate();
-	std::string nanosecondsToDatetime(long long nanoseconds);
 
 	std::map<uint8_t, int> frequencyMap;
 	int udp_nopayload_cnt;
@@ -277,6 +276,8 @@ public:
 	int ret;
 
 };
+
+std::string nanosecondsToDatetime(long long nanoseconds);
 
 FlowKey* generateFlowKey(const Packet* packet);
 
