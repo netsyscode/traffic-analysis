@@ -2,7 +2,6 @@
 #include "handledata.h"
 #include <netinet/in.h>
 #include <algorithm>
-#include "global.h"
 #include <regex>
 
 extern HandlePacketData data;
@@ -11,6 +10,183 @@ extern long long timestamp_of_last_packet;
 extern uint64_t packet_cnt_of_pcap;
 extern uint64_t bytes_cnt_of_pcap;
 extern PacketsFeature packetsFeature;
+
+uint32_t sps_parser_offset;
+uint8_t sps_parser_base64_table[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+size_t sps_parser_base64_decode(char *buffer) {
+	uint8_t dtable[256], block[4], tmp, pad = 0;
+	size_t i, count = 0, pos = 0, len = strlen(buffer);
+
+	memset(dtable, 0x80, 256);
+	for (i = 0; i < sizeof(sps_parser_base64_table) - 1; i++) {
+		dtable[sps_parser_base64_table[i]] = (unsigned char) i;
+	}
+	dtable['='] = 0;
+
+	for (i = 0; i < len; i++) {
+		if (dtable[static_cast<unsigned char>(buffer[i])] != 0x80) {
+			count++;
+		}
+	}
+	if (count == 0 || count % 4) return 0;
+
+	count = 0;
+	for (i = 0; i < len; i++) {
+		tmp = dtable[static_cast<unsigned char>(buffer[i])];
+		if (tmp == 0x80) continue;
+
+		if (buffer[i] == '=') pad++;
+		block[count] = tmp;
+		count++;
+		if (count == 4) {
+			buffer[pos++] = (block[0] << 2) | (block[1] >> 4);
+			buffer[pos++] = (block[1] << 4) | (block[2] >> 2);
+			buffer[pos++] = (block[2] << 6) | block[3];
+
+			count = 0;
+			if (pad) {
+
+				if (pad == 1) pos--;
+				else if (pad == 2) pos -= 2;
+				else return 0;
+				break;
+			}
+		}
+	}
+	return pos;
+}
+
+uint32_t sps_parser_read_bits(char *buffer, uint32_t count) {
+	uint32_t result = 0;
+	uint8_t index = (sps_parser_offset / 8);
+	uint8_t bitNumber = (sps_parser_offset - (index * 8));
+	uint8_t outBitNumber = count - 1;
+	for (uint8_t c = 0; c < count; c++) {
+		if (buffer[index] << bitNumber & 0x80) {
+			result |= (1 << outBitNumber);
+		}
+		if (++bitNumber > 7) { bitNumber = 0; index++; }
+		outBitNumber--;
+	}
+	sps_parser_offset += count;
+	return result;
+}
+
+uint32_t sps_parser_read_ueg(char* buffer) {
+    uint32_t bitcount = 0;
+
+    for (;;) {
+    	if (sps_parser_read_bits(buffer, 1) == 0) {
+	        bitcount++;
+    	} else {
+    		// bitOffset--;
+    		break;
+    	}
+    }
+
+    	// bitOffset --;
+    uint32_t result = 0;
+    if (bitcount) {
+    	uint32_t val = sps_parser_read_bits(buffer, bitcount);
+        result = (uint32_t) ((1 << bitcount) - 1 + val);
+    }
+
+    return result;
+}
+
+int32_t sps_parser_read_eg(char* buffer) {
+	uint32_t value = sps_parser_read_ueg(buffer);
+	if (value & 0x01) {
+		return (value + 1) / 2;
+	} else {
+		return -(value / 2);
+	}
+}
+
+void sps_parser_skipScalingList(char* buffer, uint8_t count) {
+	uint32_t deltaScale, lastScale = 8, nextScale = 8;
+	for (uint8_t j = 0; j < count; j++) {
+		if (nextScale != 0) {
+			deltaScale = sps_parser_read_eg(buffer);
+			nextScale = (lastScale + deltaScale + 256) % 256;
+		}
+		lastScale = (nextScale == 0 ? lastScale : nextScale);
+	}
+}
+
+uint32_t sps_parser(char *buffer) {
+
+	uint8_t profileIdc = 0;
+	uint32_t pict_order_cnt_type = 0;
+	uint32_t picWidthInMbsMinus1 = 0;
+	uint32_t picHeightInMapUnitsMinus1 = 0;
+	uint8_t frameMbsOnlyFlag = 0;
+	uint32_t frameCropLeftOffset = 0;
+	uint32_t frameCropRightOffset = 0;
+	uint32_t frameCropTopOffset = 0;
+	uint32_t frameCropBottomOffset = 0;
+
+
+	sps_parser_offset = 0;
+	sps_parser_base64_decode(buffer);
+	sps_parser_read_bits(buffer, 8);
+	profileIdc = sps_parser_read_bits(buffer, 8);
+	sps_parser_read_bits(buffer, 16);
+	sps_parser_read_ueg(buffer);
+
+	if (profileIdc == 100 || profileIdc == 110 || profileIdc == 122 ||
+		profileIdc == 244 || profileIdc == 44 || profileIdc == 83 ||
+		profileIdc == 86 || profileIdc == 118 || profileIdc == 128) {
+		uint32_t chromaFormatIdc = sps_parser_read_ueg(buffer);
+		if (chromaFormatIdc == 3) sps_parser_read_bits(buffer, 1);
+		sps_parser_read_ueg(buffer);
+		sps_parser_read_ueg(buffer);
+		sps_parser_read_bits(buffer, 1);
+		if (sps_parser_read_bits(buffer, 1)) {
+			for (uint8_t i = 0; i < (chromaFormatIdc != 3) ? 8 : 12; i++) {
+				if (sps_parser_read_bits(buffer, 1)) {
+					if (i < 6) {
+						sps_parser_skipScalingList(buffer, 16);
+					} else {
+						sps_parser_skipScalingList(buffer, 64);
+					}
+				}
+			}
+		}
+	}
+
+	sps_parser_read_ueg(buffer);
+	pict_order_cnt_type = sps_parser_read_ueg(buffer);
+
+	if (pict_order_cnt_type == 0) {
+		sps_parser_read_ueg(buffer);
+	} else if (pict_order_cnt_type == 1) {
+		sps_parser_read_bits(buffer, 1);
+		sps_parser_read_eg(buffer);
+		sps_parser_read_eg(buffer);
+		for (uint32_t i = 0; i < sps_parser_read_ueg(buffer); i++) {
+			sps_parser_read_eg(buffer);
+		}
+	}
+
+	sps_parser_read_ueg(buffer);
+	sps_parser_read_bits(buffer, 1);
+	picWidthInMbsMinus1 = sps_parser_read_ueg(buffer);
+	picHeightInMapUnitsMinus1 = sps_parser_read_ueg(buffer);
+	frameMbsOnlyFlag = sps_parser_read_bits(buffer, 1);
+	if (!frameMbsOnlyFlag) sps_parser_read_bits(buffer, 1);
+	sps_parser_read_bits(buffer, 1);
+	if (sps_parser_read_bits(buffer, 1)) {
+		frameCropLeftOffset = sps_parser_read_ueg(buffer);
+		frameCropRightOffset = sps_parser_read_ueg(buffer);
+		frameCropTopOffset = sps_parser_read_ueg(buffer);
+		frameCropBottomOffset = sps_parser_read_ueg(buffer);
+	}
+	return (
+		(((picWidthInMbsMinus1 + 1) * 16) - frameCropLeftOffset * 2 - frameCropRightOffset * 2) << 16 |
+		(((2 - frameMbsOnlyFlag) * (picHeightInMapUnitsMinus1 + 1) * 16) - ((frameMbsOnlyFlag ? 2 : 4) * (frameCropTopOffset + frameCropBottomOffset)))
+	);
+}
 
 Flow::Flow(FlowKey flowKey)//构造函数
 {
@@ -190,7 +366,8 @@ void Flow::updateFeature(RawPacket* pkt) {
 		if(latest_timestamp == start_timestamp) {//如果是第一个包
 			ackBuffer = acknoNumber;
 			packetBuffer = seqNumber;
-		
+		}
+
 		if(seqNumber <= packetBuffer){
 			// 循环
 			if(packetBuffer - seqNumber> 0x7FFFFFFF){
@@ -207,7 +384,6 @@ void Flow::updateFeature(RawPacket* pkt) {
 			long sec = pkt->getPacketTimeStamp().tv_sec;
 			long nsec = pkt->getPacketTimeStamp().tv_nsec;
 			seqToTime[seqNumber] = sec * 1000000000LL + nsec;
-			//std::cout << "insert to seq2time!" << std::endl;
         }
 
 		if (tcpHeader->ackFlag) {
@@ -306,7 +482,7 @@ void Flow::updateFeature(RawPacket* pkt) {
             }
 			data.WebResponse->push_back(webresponse);
         }
-		}
+	}
 		// Get the UDP layer
 		pcpp::UdpLayer* udpLayer = parsedPacket.getLayerOfType<pcpp::UdpLayer>();
 		if (udpLayer != nullptr) {
@@ -323,17 +499,13 @@ void Flow::updateFeature(RawPacket* pkt) {
 				for (size_t i = 0; i < udpPayloadLength; ++i) {
 					frequencyMap[payload[i]]++;
 				}
-				// 寻找SPS NAL单元起始码
-				for (size_t i = 0; i < udpPayloadLength - 4; i++) {
-					// 检查NAL单元起始码
-					if (payload[i] == 0x00 && payload[i+1] == 0x00 && payload[i+2] == 0x01) {
-						uint8_t nalType = payload[i+3] & 0x1F;
-						if (nalType == 7) { // SPS类型
-							std::cout << "Found SPS packet" << std::endl;
-							// 根据需要处理SPS数据
-							break;
-						}
-					}
+				uint8_t* rtp_payload = udpLayer->getLayerPayload();
+				size_t* sps_length = 0;
+				uint8_t* sps_data = extract_sps_from_rtp(rtp_payload, udpPayloadLength, sps_length);
+				if (sps_data != NULL && sps_length != 0){
+					char* sps_buffer = (char*)sps_data;
+					uint32_t dimensions = sps_parser(sps_buffer);
+					printf("width = %d\nheight = %d\n", dimensions >> 16, dimensions & 0xFFFF);
 				}
 			}
 			payload_size += udpPayloadLength;
@@ -456,7 +628,6 @@ void Flow::updateFeature(RawPacket* pkt) {
 			}
 		}
 		data.protocolInfoVector->push_back(protocolInfo);
-	}
 }
 
 void Flow::terminate()
@@ -873,4 +1044,45 @@ double calculateKurtosis(const std::vector<double>& packets_size) {
     }
     kurtosis = (kurtosis * n * (n + 1) / ((n - 1) * (n - 2) * (n - 3))) - (3 * std::pow(n - 1, 2) / ((n - 2) * (n - 3)));
     return kurtosis;
+}
+
+uint8_t* extract_sps_from_rtp(uint8_t* rtp_payload, size_t payload_length, size_t* sps_length) {
+    // 确保提供了有效的参数
+    if (!rtp_payload || payload_length == 0 || !sps_length) {
+        return NULL;
+    }
+
+    // 遍历RTP负载以查找SPS NALU
+    for (size_t i = 0; i < payload_length - 1; ++i) {
+        // NALU起始码通常为0x000001或0x00000001（H.264）
+        if (rtp_payload[i] == 0x00 && rtp_payload[i + 1] == 0x00 && rtp_payload[i + 2] == 0x01) {
+            // 找到NALU起始码，检查NALU类型
+            uint8_t nalu_type = rtp_payload[i + 3] & 0x1F;
+            if (nalu_type == 7) { // SPS NALU类型为7
+                // 计算SPS数据的长度
+                size_t start = i + 4; // SPS数据开始位置
+                size_t end = payload_length; // 假设SPS是最后一个NALU
+                // 寻找下一个NALU起始码作为结束标志（如果有）
+                for (size_t j = start; j < payload_length - 1; ++j) {
+                    if (rtp_payload[j] == 0x00 && rtp_payload[j + 1] == 0x00 && rtp_payload[j + 2] == 0x01) {
+                        end = j; // 找到下一个NALU起始码，更新结束位置
+                        break;
+                    }
+                }
+                *sps_length = end - start;
+                // 分配内存并复制SPS数据
+                uint8_t* sps_data = (uint8_t*)malloc(*sps_length);
+                if (!sps_data) {
+                    // 内存分配失败
+                    *sps_length = 0;
+                    return NULL;
+                }
+                memcpy(sps_data, rtp_payload + start, *sps_length);
+                return sps_data;
+            }
+        }
+    }
+
+    // 未找到SPS NALU
+    return NULL;
 }

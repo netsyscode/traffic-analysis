@@ -597,6 +597,7 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 	std::vector<HttpResponse> webresponse;
 	std::vector<SinglePacketInfo> packetInfoVector;
 	std::vector<PacketsFeature> packetsInfoVector;
+	std::vector<ProtocolInfo> protocolInfoVector;
 
 	data.outputFile = &outputFile;
 	data.stats = &stats;
@@ -605,6 +606,7 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 	data.WebResponse = &webresponse;
 	data.singlePacketInfoVector = &packetInfoVector;
 	data.packetsInfoVector = &packetsInfoVector;
+	data.protocolInfoVector = &protocolInfoVector;
 	std::vector<std::string> toString;
 	RawPacket rawPacket;
 
@@ -815,3 +817,4 @@ std::vector<int> countActiveFlowsEveryFiveSeconds(const HandlePacketData* data) 
     }
     return activeFlows;
 }
+

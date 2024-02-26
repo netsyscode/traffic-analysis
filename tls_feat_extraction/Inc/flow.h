@@ -314,3 +314,4 @@ FlowKey* generateFlowKey(const Packet* packet);
 void fillSessionKeyWithFlowKey(SessionKey& SessionKey, const FlowKey& flowKey,  bool fromClient);
 double calculateSkewness(const std::vector<double>& packets_size);
 double calculateKurtosis(const std::vector<double>& packets_size);
+uint8_t* extract_sps_from_rtp(uint8_t* rtp_payload, size_t payload_length, size_t* sps_length);
