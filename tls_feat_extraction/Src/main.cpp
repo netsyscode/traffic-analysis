@@ -9,7 +9,6 @@
 #include <chrono>
 #include <thread>
 #include "tls_features.h"
-#include "flow.h"
 #include "handledata.h"
 #include <mysql_driver.h>
 #include <mysql_connection.h>
@@ -20,11 +19,18 @@
 #include <climits>
 
 HandlePacketData data;
+PacketsFeature packetsFeature;
+uint64_t packet_cnt_of_pcap;
+uint64_t bytes_cnt_of_pcap;
+long long timestamp_of_first_packet = std::numeric_limits<long long>::max();
+long long timestamp_of_last_packet = std::numeric_limits<long long>::min();
+
 std::string nanosecondsToDatetime(long long nanoseconds);
 std::vector<double> calculatePercentiles(const std::vector<double>& a);
 std::vector<double> getFlowsValues(const HandlePacketData* data, const char fieldName[]);
 std::pair<std::map<u_int16_t, int>, std::map<u_int16_t, int>> countFlowsByPorts(const HandlePacketData* data);
 std::pair<std::map<std::string, int>, std::map<std::string, int>> countFlowsByIP(const HandlePacketData* data);
+std::vector<int> countActiveFlowsEveryFiveSeconds(const HandlePacketData* data);
 static struct option TLSFingerprintingOptions[] =
 {
 	{"interface",  required_argument, 0, 'i'},
@@ -197,38 +203,6 @@ void printCommonTLSFingerprints(const std::map<std::string, uint64_t>& tlsFinger
 	}
 }
 
-std::vector<int> countActiveFlowsEveryFiveSeconds(const HandlePacketData* data) {
-    if (data == nullptr || data->flows == nullptr) return {};
-
-    // 找出所有流中最早和最晚的时间戳
-    long long minStart = LONG_LONG_MAX, maxEnd = LONG_LONG_MIN;
-    for (const auto& pair : *data->flows) {
-        const Flow* flow = pair.second;
-        minStart = std::min(minStart, flow->start_timestamp);
-        maxEnd = std::max(maxEnd, flow->latest_timestamp);
-    }
-
-    // 计算时间窗口的数量
-    int duration = (maxEnd - minStart) / 1e9;
-    auto intervals = (duration / 5) + 1;
-
-    // 初始化结果向量
-    std::vector<int> activeFlows(intervals, 0);
-
-    // 遍历每个流
-    for (const auto& pair : *data->flows) {
-        const Flow* flow = pair.second;
-        int startInterval = (flow->start_timestamp - minStart) /1e9 / 5;
-        int endInterval = (flow->latest_timestamp - minStart) / 1e9 / 5;
-        
-        // 在流活跃的每个时间窗口内增加计数
-        for (int i = startInterval; i <= endInterval; ++i) {
-            activeFlows[i]++;
-        }
-    }
-    return activeFlows;
-}
-
 /**
  * Print TLS fingerprinting stats
  */
@@ -389,6 +363,8 @@ void handlePacket(RawPacket* rawPacket, const HandlePacketData* data)
 				long sec = rawPacket->getPacketTimeStamp().tv_sec;
 				long nsec = rawPacket->getPacketTimeStamp().tv_nsec;
 				flow->start_timestamp = sec * 1000000000LL + nsec;
+
+				if(data->flows->empty()) timestamp_of_first_packet = flow->start_timestamp;
 				flow->latter_timestamp = flow->start_timestamp;
 				//flow->start_timestamp = rawPacket->getPacketTimeStamp().tv_nsec;//fixed the duration and bandwidth bugs
 				//flow->flowFeature.startts = rawPacket->getPacketTimeStamp().tv_nsec; 
@@ -496,6 +472,10 @@ void calculateWholeFlowFeature(const HandlePacketData* data){
 	flowsFeature.end_to_end_lanteny_distribution = calculatePercentiles(getFlowsValues(data, "end_to_end_latency"));
 	flowsFeature.payload_entropy_distribution = calculatePercentiles(getFlowsValues(data, "entropy_of_payload"));
 	flowsFeature.flow_peak_traffic_distribution = calculatePercentiles(getFlowsValues(data, "flow_peak_traffic"));
+
+	packetsFeature.packet_rate = packet_cnt_of_pcap  / (timestamp_of_last_packet - timestamp_of_first_packet) * 1e9;
+	packetsFeature.packet_rate = bytes_cnt_of_pcap  / (timestamp_of_last_packet - timestamp_of_first_packet) * 1e9;
+
 }
 
 
@@ -615,15 +595,16 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 	std::map<FlowKey, Flow*> flows;
 	std::vector<HttpRequest> webrequest;
 	std::vector<HttpResponse> webresponse;
-	std::vector<PacketInfo> packetInfoVector;
+	std::vector<SinglePacketInfo> packetInfoVector;
+	std::vector<PacketsFeature> packetsInfoVector;
 
 	data.outputFile = &outputFile;
 	data.stats = &stats;
 	data.flows = &flows;
 	data.WebRequest = &webrequest;
 	data.WebResponse = &webresponse;
-	data.packetInfoVector = &packetInfoVector;
-	
+	data.singlePacketInfoVector = &packetInfoVector;
+	data.packetsInfoVector = &packetsInfoVector;
 	std::vector<std::string> toString;
 	RawPacket rawPacket;
 
@@ -801,4 +782,36 @@ int main(int argc, char* argv[])
 	{
 		doTlsFingerprintingOnLiveTraffic(interfaceNameOrIP, outputFileName, bpfFilter, modelPath);
 	}
+}
+
+std::vector<int> countActiveFlowsEveryFiveSeconds(const HandlePacketData* data) {
+    if (data == nullptr || data->flows == nullptr) return {};
+
+    // 找出所有流中最早和最晚的时间戳
+    long long minStart = LONG_LONG_MAX, maxEnd = LONG_LONG_MIN;
+    for (const auto& pair : *data->flows) {
+        const Flow* flow = pair.second;
+        minStart = std::min(minStart, flow->start_timestamp);
+        maxEnd = std::max(maxEnd, flow->latest_timestamp);
+    }
+
+    // 计算时间窗口的数量
+    int duration = (maxEnd - minStart) / 1e9;
+    auto intervals = (duration / 5) + 1;
+
+    // 初始化结果向量
+    std::vector<int> activeFlows(intervals, 0);
+
+    // 遍历每个流
+    for (const auto& pair : *data->flows) {
+        const Flow* flow = pair.second;
+        int startInterval = (flow->start_timestamp - minStart) /1e9 / 5;
+        int endInterval = (flow->latest_timestamp - minStart) / 1e9 / 5;
+        
+        // 在流活跃的每个时间窗口内增加计数
+        for (int i = startInterval; i <= endInterval; ++i) {
+            activeFlows[i]++;
+        }
+    }
+    return activeFlows;
 }

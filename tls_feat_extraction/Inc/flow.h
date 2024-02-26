@@ -88,7 +88,7 @@ struct FlowFeature
 	int max_size_of_packet, min_size_of_packet;
 	double std_of_packet_size, end_to_end_latency, avg_window_size, avg_ttl, avg_payload_size, peak_traffic;
 	int count_of_ret_packets, count_of_syn_packets, count_of_fin_packets, count_of_rst_packets, count_of_ack_packets, count_of_psh_packets, count_of_urg_packets;
-	double max_interval_between_packets, min_interval_between_packets, entropy_of_payload;
+	double entropy_of_payload;
 	int count_of_forward_packets, count_of_backward_packets;
 
 	struct VideoStreamMetrics {
@@ -140,10 +140,9 @@ struct FlowFeature
 
 		bytes_of_flow(0), bytes_of_payload(0), header_of_packets(0), bytes_of_ret_packets(0),
 		count_of_TCPpackets(0), count_of_UDPpackets(0), count_of_ICMPpackets(0),
-		max_size_of_packet(0), min_size_of_packet(0),
 		std_of_packet_size(0.0), end_to_end_latency(0.0), avg_window_size(0.0), avg_ttl(0.0), avg_payload_size(0.0),peak_traffic(0.0),
 		count_of_ret_packets(0), count_of_syn_packets(0), count_of_fin_packets(0), count_of_rst_packets(0), count_of_ack_packets(0), count_of_psh_packets(0), count_of_urg_packets(0),
-		max_interval_between_packets(0.0), min_interval_between_packets(0.0), entropy_of_payload(0.0),
+		entropy_of_payload(0.0),
 		count_of_forward_packets(0), count_of_backward_packets(0),
 		videoMetrics{0.0, "Unknown", 0.0, "Unknown", "Unknown", "Unknown", false, false, 0.0, false, false},
 		downloadMetrics{0.0, 0.0, 0.0, 0.0, 0.0, 0, 0, 0.0, 0, 0, 0.0}
@@ -235,11 +234,39 @@ struct ProtocolInfo {
     std::string sip_data;
 };
 
-struct PacketInfo {
-	size_t packet_length;
-    size_t payload_size;
-    std::string arrival_timestamp;
-    double payload_entropy;
+struct SinglePacketInfo
+{
+	size_t payload_size = 0;
+	double payload_entropy = 0.0;
+	int packet_length = 0;
+	std::string arrival_timestamp = "";
+};
+
+
+struct PacketsFeature
+{
+	double avg_packet_size = 0.0;
+	uint32_t median_packet_size = 0;
+	int max_packet_size = 0;
+	int min_packet_size = 0;
+	double std_packet_size = 0.0;
+
+	double avg_packet_interval = 0.0;
+	double median_packet_interval = 0.0;
+	double max_interval_between_packets = 0.0;
+	double min_interval_between_packets = 0.0;
+	double std_packet_interval = 0.0;
+	
+	double packet_size_kurtosis = 0.0;
+	double packet_size_skewness = 0.0;
+	double packet_rate = 0.0;
+	double byte_rate = 0.0;
+
+	double syn_ack_time = 0.0;
+	double fin_ack_time = 0.0;
+	double psh_between_time = 0.0;
+	double urg_between_time = 0.0;
+
 };
 
 
@@ -248,6 +275,8 @@ class Flow
 public:
 	FlowKey flowKey;
 	FlowFeature flowFeature;
+	ProtocolInfo protocolInfo;
+	SinglePacketInfo packetInfo;
 	std::vector<RawPacket*> packets;//记录一条流的所有包
 	//用于计算流特征
 	long long latest_timestamp, latter_timestamp, interarrival_time_n, interarrival_time_ls, flow_duration, start_timestamp, used_ts;
@@ -274,12 +303,14 @@ public:
 	std::vector<double> rtts;
 	RawPacket* pkt;
 	int ret;
-
+	std::vector<double> packets_size;
+	std::vector<double> interval_vec;
 };
 
 std::string nanosecondsToDatetime(long long nanoseconds);
-
+double calculateMedian(std::vector<double>& vec);
+double calculateVariance(std::vector<double>& vec);
 FlowKey* generateFlowKey(const Packet* packet);
-
 void fillSessionKeyWithFlowKey(SessionKey& SessionKey, const FlowKey& flowKey,  bool fromClient);
-
+double calculateSkewness(const std::vector<double>& packets_size);
+double calculateKurtosis(const std::vector<double>& packets_size);

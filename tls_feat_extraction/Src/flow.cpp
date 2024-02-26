@@ -5,6 +5,13 @@
 #include "global.h"
 #include <regex>
 
+extern HandlePacketData data;
+extern long long timestamp_of_first_packet;
+extern long long timestamp_of_last_packet;
+extern uint64_t packet_cnt_of_pcap;
+extern uint64_t bytes_cnt_of_pcap;
+extern PacketsFeature packetsFeature;
+
 Flow::Flow(FlowKey flowKey)//构造函数
 {
 	this->flowKey = flowKey;
@@ -71,7 +78,7 @@ void Flow::addPacket(RawPacket* pkt)
 	updateFeature(pkt);
 }
 
-double calculateStandardDeviation(const std::vector<RawPacket*> packets) {
+double calculateStandardDeviation(const std::vector<RawPacket*> &packets) {
     double sum = 0.0;
     double mean;
     double standardDeviation = 0.0;
@@ -101,13 +108,11 @@ double calculateEntropy(const std::map<uint8_t, int>& frequencyMap) {
     return entropy;
 }
 
-void Flow::updateFeature(RawPacket* pkt) 
-{
-	ProtocolInfo protocolInfo;
-	PacketInfo packetInfo;
-	packetInfo.packet_length = pkt->getFrameLength();
-	//统计包长大于1000的包数量
+void Flow::updateFeature(RawPacket* pkt) {
 	int pktLen = pkt->getFrameLength();
+	packetInfo.packet_length = pktLen;
+	packets_size.push_back(pktLen);
+	//统计包长大于1000的包数量
 	if (pktLen > 1000) {
 		cnt_len_over_1000++;
 		ave_pkt_size_over_1000 += pktLen;
@@ -124,19 +129,23 @@ void Flow::updateFeature(RawPacket* pkt)
 	}
 	//累加包长
 	packets_size_sum += pktLen;//单位
-	flowFeature.max_size_of_packet = std::max(flowFeature.max_size_of_packet, pktLen);
-	flowFeature.min_size_of_packet = std::min(flowFeature.min_size_of_packet, pktLen);
+	packetsFeature.max_packet_size = std::max(packetsFeature.max_packet_size, pktLen);
+	packetsFeature.min_packet_size = std::min(packetsFeature.min_packet_size, pktLen);
 
 	//更新最后时间戳(以ns为单位)
 	long sec = pkt->getPacketTimeStamp().tv_sec;
 	long nsec = pkt->getPacketTimeStamp().tv_nsec;
 	latest_timestamp = sec * 1000000000LL + nsec;
+	timestamp_of_last_packet = std::max(timestamp_of_last_packet, latest_timestamp);
+	// timestamp_of_first_packet = std::min(timestamp_of_first_packet, latest_timestamp);
+
 	packetInfo.arrival_timestamp = nanosecondsToDatetime(latest_timestamp);
 
 	if(latest_timestamp != latter_timestamp){
 		auto diff = (latest_timestamp - latter_timestamp) / 1e9;
-		flowFeature.max_interval_between_packets = std::max(flowFeature.max_interval_between_packets, diff);
-		flowFeature.min_interval_between_packets = std::min(flowFeature.min_interval_between_packets, diff);
+		interval_vec.push_back(diff);
+		packetsFeature.max_interval_between_packets = std::max(packetsFeature.max_interval_between_packets, diff);
+		packetsFeature.min_interval_between_packets = std::min(packetsFeature.min_interval_between_packets, diff);
 	}
 
 	//payload相关
@@ -181,7 +190,6 @@ void Flow::updateFeature(RawPacket* pkt)
 		if(latest_timestamp == start_timestamp) {//如果是第一个包
 			ackBuffer = acknoNumber;
 			packetBuffer = seqNumber;
-		}
 		
 		if(seqNumber <= packetBuffer){
 			// 循环
@@ -215,35 +223,24 @@ void Flow::updateFeature(RawPacket* pkt)
 						flowIter->second->rtts.push_back(double(synAckTime - synTime) / 1e9);
 					//seqToTime.erase(seqNumber - 1);
             }
-			// 	if (tcpLayer->getTcpHeader()->synFlag && tcpLayer->getTcpHeader()->ackFlag) {
-            // //if (seqToTime.count(seqNumber - 1) > 0) {
-			// 	auto key = this->flowKey;
-			// 	FlowKey keyPal = {key.dstIP, key.srcIP, key.dstPort, key.srcPort};
-			// 	std::map<FlowKey, Flow*>::iterator flowIter = data.flows->find(keyPal);
-			// 	if (flowIter != data.flows->end()){
-			// 		uint64_t synTime = flowIter->second->start_timestamp;
-			// 		//synTime = seqToTime[seqNumber - 1];
-			// 		long sec = pkt->getPacketTimeStamp().tv_sec;
-			// 		long nsec = pkt->getPacketTimeStamp().tv_nsec;
-			// 		uint64_t synAckTime = sec * 1000000000LL + nsec;
-			// 		flowIter->second->rtts.push_back(double(synAckTime - synTime) / 1e9);//算出来的应该是发起会话的RRT
-			// 		rtts.push_back(double(synAckTime - synTime) / 1e9);
-			// 		seqToTime.erase(seqNumber - 1);
-			// 	//}
-            // }
-        }
+			if (tcpLayer->getTcpHeader()->synFlag && tcpLayer->getTcpHeader()->ackFlag) {
+				if (seqToTime.count(seqNumber - 1) > 0) {
+					auto key = this->flowKey;
+					FlowKey keyPal = {key.dstIP, key.srcIP, key.dstPort, key.srcPort};
+					std::map<FlowKey, Flow*>::iterator flowIter = data.flows->find(keyPal);
+					if (flowIter != data.flows->end()){
+						uint64_t synTime = flowIter->second->start_timestamp;
+						//synTime = seqToTime[seqNumber - 1];
+						long sec = pkt->getPacketTimeStamp().tv_sec;
+						long nsec = pkt->getPacketTimeStamp().tv_nsec;
+						uint64_t synAckTime = sec * 1000000000LL + nsec;
+						packetsFeature.syn_ack_time = double(synAckTime - synTime) / 1e9;//算出来的应该是发起会话的RRT
+					}
+				}
+			}
+		}
 		pcpp::HttpRequestLayer* httpRequestLayer = parsedPacket.getLayerOfType<pcpp::HttpRequestLayer>();
         if (httpRequestLayer != nullptr) {
-
-            // const pcpp::HeaderField* hostField = httpRequestLayer->getFieldByName(PCPP_HTTP_HOST_FIELD);
-            // if (hostField != nullptr) {
-            //     std::cout << "Host: " << hostField->getFieldValue() << std::endl;
-            // }
-
-            // std::cout << "HTTP Request Headers:" << std::endl;
-            // for (pcpp::HeaderField* hdr = httpRequestLayer->getFirstField(); hdr != nullptr; hdr = httpRequestLayer->getNextField(hdr)) {
-            //     std::cout << hdr->getFieldName() << ": " << hdr->getFieldValue() << std::endl;
-            // }
 			HttpRequest webrequest;
 			webrequest.url = httpRequestLayer->getFirstLine()->getUri();
 			webrequest.method = httpRequestLayer->getFirstLine()->getMethod();
@@ -309,164 +306,175 @@ void Flow::updateFeature(RawPacket* pkt)
             }
 			data.WebResponse->push_back(webresponse);
         }
-    }
-
-    // Get the UDP layer
-    pcpp::UdpLayer* udpLayer = parsedPacket.getLayerOfType<pcpp::UdpLayer>();
-    if (udpLayer != nullptr) {
-        // The payload length is the UDP payload size
-		udp_packets ++;
-		auto udpHeadr = udpLayer->getUdpHeader();
-		protocolInfo.udp_header_length = udpHeadr->length;
-		protocolInfo.udp_checksum = udpHeadr->headerChecksum;
-        size_t udpPayloadLength = udpLayer->getLayerPayloadSize();
-		packetInfo.payload_size = udpPayloadLength;
-		if(udpPayloadLength > 0){
-            const uint8_t* payload = udpLayer->getLayerPayload();
-			//entropy
-            for (size_t i = 0; i < udpPayloadLength; ++i) {
-                frequencyMap[payload[i]]++;
-            }
-			// 寻找SPS NAL单元起始码
-			for (size_t i = 0; i < udpPayloadLength - 4; i++) {
-				// 检查NAL单元起始码
-				if (payload[i] == 0x00 && payload[i+1] == 0x00 && payload[i+2] == 0x01) {
-					uint8_t nalType = payload[i+3] & 0x1F;
-					if (nalType == 7) { // SPS类型
-						std::cout << "Found SPS packet" << std::endl;
-						// 根据需要处理SPS数据
-						break;
+		}
+		// Get the UDP layer
+		pcpp::UdpLayer* udpLayer = parsedPacket.getLayerOfType<pcpp::UdpLayer>();
+		if (udpLayer != nullptr) {
+			// The payload length is the UDP payload size
+			udp_packets ++;
+			auto udpHeadr = udpLayer->getUdpHeader();
+			protocolInfo.udp_header_length = udpHeadr->length;
+			protocolInfo.udp_checksum = udpHeadr->headerChecksum;
+			size_t udpPayloadLength = udpLayer->getLayerPayloadSize();
+			packetInfo.payload_size = udpPayloadLength;
+			if(udpPayloadLength > 0){
+				const uint8_t* payload = udpLayer->getLayerPayload();
+				//entropy
+				for (size_t i = 0; i < udpPayloadLength; ++i) {
+					frequencyMap[payload[i]]++;
+				}
+				// 寻找SPS NAL单元起始码
+				for (size_t i = 0; i < udpPayloadLength - 4; i++) {
+					// 检查NAL单元起始码
+					if (payload[i] == 0x00 && payload[i+1] == 0x00 && payload[i+2] == 0x01) {
+						uint8_t nalType = payload[i+3] & 0x1F;
+						if (nalType == 7) { // SPS类型
+							std::cout << "Found SPS packet" << std::endl;
+							// 根据需要处理SPS数据
+							break;
+						}
 					}
 				}
 			}
-		}
-        payload_size += udpPayloadLength;
-		if(udpPayloadLength == 0){
-			udp_nopayload_cnt ++;
-		}
-    }
-
-	pcpp::IcmpLayer* icmpLayer = parsedPacket.getLayerOfType<pcpp::IcmpLayer>();
-    if (icmpLayer != nullptr) {
-        icmp_packets ++;
-		protocolInfo.icmp_code = icmpLayer->getIcmpHeader()->code;
-		protocolInfo.icmp_type = icmpLayer->getMessageType();
-
-    }
-	
-	pcpp::IPv4Layer* ipLayer = parsedPacket.getLayerOfType<pcpp::IPv4Layer>();
-    if (ipLayer != nullptr) {
-        ttl += ipLayer->getIPv4Header()->timeToLive;
-    }
-
-	pcpp::EthLayer* ethLayer = parsedPacket.getLayerOfType<pcpp::EthLayer>();
-	if(ethLayer != nullptr){
-		protocolInfo.ethernet_type = ethLayer->getEthHeader()->etherType;
-	}
-
-	pcpp::EthLayer* ethernetLayer = parsedPacket.getLayerOfType<pcpp::EthLayer>();
-	if (ethernetLayer != nullptr) {
-		std::string macSrc = ethernetLayer->getSourceMac().toString();
-		std::string macDst = ethernetLayer->getDestMac().toString();
-		uint16_t ethType = ethernetLayer->getEthHeader()->etherType;
-		protocolInfo.mac_source =macSrc;
-		protocolInfo.mac_destination = macDst;
-		protocolInfo.ethernet_type = ethType;
-	}
-
-	pcpp::VlanLayer* vlanLayer = parsedPacket.getLayerOfType<pcpp::VlanLayer>();
-	if (vlanLayer != nullptr) {
-		uint16_t vlanID = vlanLayer->getVlanID();
-		protocolInfo.vlan_id = vlanID;
-	}
-
-	pcpp::MplsLayer* mplsLayer = parsedPacket.getLayerOfType<pcpp::MplsLayer>();
-	if (mplsLayer != nullptr) {
-		uint32_t mplsLabel = mplsLayer->getMplsLabel();
-		protocolInfo.mpls_label = mplsLabel;
-	}
-
-	pcpp::PPPoELayer* pppoeLayer = parsedPacket.getLayerOfType<pcpp::PPPoELayer>();
-	if (pppoeLayer != nullptr) {
-		uint16_t pppoeSessionId = pppoeLayer->getPPPoEHeader()->sessionId;
-	}
-
-	pcpp::IPv4Layer* ipv4Layer = parsedPacket.getLayerOfType<pcpp::IPv4Layer>();
-	if (ipv4Layer != nullptr) {
-		uint8_t ipTos = ipv4Layer->getIPv4Header()->typeOfService;
-		uint16_t ipChecksum = ipv4Layer->getIPv4Header()->headerChecksum;
-		uint8_t ipFragmentationFlag = ipv4Layer->getFragmentFlags();
-		uint16_t ipID = ipv4Layer->getIPv4Header()->ipId;
-		protocolInfo.ip_tos = ipTos;
-		protocolInfo.ip_header_checksum = ipChecksum;
-		protocolInfo.ip_fragmentation_flag = ipFragmentationFlag;
-		protocolInfo.ip_identifier = ipID;
-	}
-
-	pcpp::IPv6Layer* ipv6Layer = parsedPacket.getLayerOfType<pcpp::IPv6Layer>();
-	if (ipv6Layer != nullptr) {
-		uint8_t* ipv6FlowLabel = ipv6Layer->getIPv6Header()->flowLabel;
-		uint8_t ipv6NextHeader = ipv6Layer->getIPv6Header()->nextHeader;
-		protocolInfo.ipv6_flow_label = ipv6FlowLabel;
-		protocolInfo.ipv6_next_header = ipv6NextHeader;
-	}
-
-	pcpp::ArpLayer* arpLayer = parsedPacket.getLayerOfType<pcpp::ArpLayer>();
-	if (arpLayer != nullptr) {
-		protocolInfo.arp_request = (arpLayer->getArpHeader()->opcode == pcpp::ARP_REQUEST);
-		protocolInfo.arp_reply = (arpLayer->getArpHeader()->opcode == pcpp::ARP_REPLY);
-	}
-
-	pcpp::DnsLayer* dnsLayer = parsedPacket.getLayerOfType<pcpp::DnsLayer>();
-	if (dnsLayer != nullptr) {
-		// Iterate over DNS queries if exist
-		if (dnsLayer->getFirstQuery() != nullptr) {
-			for (pcpp::DnsQuery* query = dnsLayer->getFirstQuery(); query != nullptr; query = dnsLayer->getNextQuery(query)) {
-				std::string dnsQueryName = query->getName(); 
-				pcpp::DnsType dnsQueryType = query->getDnsType(); 
+			payload_size += udpPayloadLength;
+			if(udpPayloadLength == 0){
+				udp_nopayload_cnt ++;
 			}
 		}
-	}
-	// 解析 SMTP 和 FTP 命令/响应
-	pcpp::TcpLayer* tcpLayer = parsedPacket.getLayerOfType<pcpp::TcpLayer>();
-	if (tcpLayer != nullptr) {
-		std::string payload(reinterpret_cast<const char*>(tcpLayer->getLayerPayload()), tcpLayer->getLayerPayloadSize());
-		std::regex commandRegex("^(EHLO|HELO|MAIL FROM|RCPT TO|DATA|QUIT|220|250|550|USER|PASS|RETR|STOR).*");
-		std::smatch matches;
-		if (std::regex_search(payload, matches, commandRegex)) {
-			protocolInfo.smtp_command = matches[1];
-		}
-	}
 
-	// 解析 DHCP 消息类型
-	pcpp::DhcpLayer* dhcpLayer = parsedPacket.getLayerOfType<pcpp::DhcpLayer>();
-	if (dhcpLayer != nullptr) {
-		pcpp::DhcpMessageType dhcpMessageType = dhcpLayer->getMesageType();
-		protocolInfo.dhcp_message_type = static_cast<int>(dhcpMessageType);
-	}
+		pcpp::IcmpLayer* icmpLayer = parsedPacket.getLayerOfType<pcpp::IcmpLayer>();
+		if (icmpLayer != nullptr) {
+			icmp_packets ++;
+			protocolInfo.icmp_code = icmpLayer->getIcmpHeader()->code;
+			protocolInfo.icmp_type = icmpLayer->getMessageType();
 
-	// 解析 SIP 请求方法和响应状态码
-	pcpp::SipLayer* sipLayer = parsedPacket.getLayerOfType<pcpp::SipLayer>();
-	if (sipLayer != nullptr) {
-		std::string sipData(reinterpret_cast<const char*>(sipLayer->getData()), sipLayer->getDataLen());
-		std::regex sipRegex("^(INVITE|ACK|BYE|CANCEL|OPTIONS|REGISTER|200 OK|404 Not Found).*");
-		std::smatch sipMatches;
-		if (std::regex_search(sipData, sipMatches, sipRegex)) {
-			protocolInfo.sip_data = sipMatches[1];
 		}
+		
+		pcpp::IPv4Layer* ipLayer = parsedPacket.getLayerOfType<pcpp::IPv4Layer>();
+		if (ipLayer != nullptr) {
+			ttl += ipLayer->getIPv4Header()->timeToLive;
+		}
+
+		pcpp::EthLayer* ethLayer = parsedPacket.getLayerOfType<pcpp::EthLayer>();
+		if(ethLayer != nullptr){
+			protocolInfo.ethernet_type = ethLayer->getEthHeader()->etherType;
+		}
+
+		pcpp::EthLayer* ethernetLayer = parsedPacket.getLayerOfType<pcpp::EthLayer>();
+		if (ethernetLayer != nullptr) {
+			std::string macSrc = ethernetLayer->getSourceMac().toString();
+			std::string macDst = ethernetLayer->getDestMac().toString();
+			uint16_t ethType = ethernetLayer->getEthHeader()->etherType;
+			protocolInfo.mac_source =macSrc;
+			protocolInfo.mac_destination = macDst;
+			protocolInfo.ethernet_type = ethType;
+		}
+
+		pcpp::VlanLayer* vlanLayer = parsedPacket.getLayerOfType<pcpp::VlanLayer>();
+		if (vlanLayer != nullptr) {
+			uint16_t vlanID = vlanLayer->getVlanID();
+			protocolInfo.vlan_id = vlanID;
+		}
+
+		pcpp::MplsLayer* mplsLayer = parsedPacket.getLayerOfType<pcpp::MplsLayer>();
+		if (mplsLayer != nullptr) {
+			uint32_t mplsLabel = mplsLayer->getMplsLabel();
+			protocolInfo.mpls_label = mplsLabel;
+		}
+
+		pcpp::PPPoELayer* pppoeLayer = parsedPacket.getLayerOfType<pcpp::PPPoELayer>();
+		if (pppoeLayer != nullptr) {
+			uint16_t pppoeSessionId = pppoeLayer->getPPPoEHeader()->sessionId;
+			protocolInfo.pppoe_session_id = pppoeSessionId;
+		}
+
+		pcpp::IPv4Layer* ipv4Layer = parsedPacket.getLayerOfType<pcpp::IPv4Layer>();
+		if (ipv4Layer != nullptr) {
+			uint8_t ipTos = ipv4Layer->getIPv4Header()->typeOfService;
+			uint16_t ipChecksum = ipv4Layer->getIPv4Header()->headerChecksum;
+			uint8_t ipFragmentationFlag = ipv4Layer->getFragmentFlags();
+			uint16_t ipID = ipv4Layer->getIPv4Header()->ipId;
+			protocolInfo.ip_tos = ipTos;
+			protocolInfo.ip_header_checksum = ipChecksum;
+			protocolInfo.ip_fragmentation_flag = ipFragmentationFlag;
+			protocolInfo.ip_identifier = ipID;
+		}
+
+		pcpp::IPv6Layer* ipv6Layer = parsedPacket.getLayerOfType<pcpp::IPv6Layer>();
+		if (ipv6Layer != nullptr) {
+			uint8_t* ipv6FlowLabel = ipv6Layer->getIPv6Header()->flowLabel;
+			uint8_t ipv6NextHeader = ipv6Layer->getIPv6Header()->nextHeader;
+			protocolInfo.ipv6_flow_label = ipv6FlowLabel;
+			protocolInfo.ipv6_next_header = ipv6NextHeader;
+		}
+
+		pcpp::ArpLayer* arpLayer = parsedPacket.getLayerOfType<pcpp::ArpLayer>();
+		if (arpLayer != nullptr) {
+			protocolInfo.arp_request = (arpLayer->getArpHeader()->opcode == pcpp::ARP_REQUEST);
+			protocolInfo.arp_reply = (arpLayer->getArpHeader()->opcode == pcpp::ARP_REPLY);
+		}
+
+		pcpp::DnsLayer* dnsLayer = parsedPacket.getLayerOfType<pcpp::DnsLayer>();
+		if (dnsLayer != nullptr) {
+			// Iterate over DNS queries if exist
+			if (dnsLayer->getFirstQuery() != nullptr) {
+				std::vector<pcpp::DnsType> DnsQueryType;
+				for (pcpp::DnsQuery* query = dnsLayer->getFirstQuery(); query != nullptr; query = dnsLayer->getNextQuery(query)) {
+					pcpp::DnsType dnsQueryType = query->getDnsType(); 
+					DnsQueryType.push_back(dnsQueryType);
+				}
+				protocolInfo.dns_query_type = DnsQueryType;
+			}
+		}
+		// 解析 SMTP 和 FTP 命令/响应
+		if (tcpLayer != nullptr) {
+			std::string payload(reinterpret_cast<const char*>(tcpLayer->getLayerPayload()), tcpLayer->getLayerPayloadSize());
+			std::regex commandRegex("^(EHLO|HELO|MAIL FROM|RCPT TO|DATA|QUIT|220|250|550|USER|PASS|RETR|STOR).*");
+			std::smatch matches;
+			if (std::regex_search(payload, matches, commandRegex)) {
+				protocolInfo.smtp_command = matches[1];
+			}
+		}
+
+		// 解析 DHCP 消息类型
+		pcpp::DhcpLayer* dhcpLayer = parsedPacket.getLayerOfType<pcpp::DhcpLayer>();
+		if (dhcpLayer != nullptr) {
+			// 查找 DHCP 消息类型的选项
+			auto messageType = dhcpLayer->getMesageType();
+			protocolInfo.dhcp_message_type = messageType;
+
+		}
+
+		// 解析 SIP 请求方法和响应状态码
+		pcpp::SipLayer* sipLayer = parsedPacket.getLayerOfType<pcpp::SipLayer>();
+		if (sipLayer != nullptr) {
+			std::string sipData(reinterpret_cast<const char*>(sipLayer->getData()), sipLayer->getDataLen());
+			std::regex sipRegex("^(INVITE|ACK|BYE|CANCEL|OPTIONS|REGISTER|200 OK|404 Not Found).*");
+			std::smatch sipMatches;
+			if (std::regex_search(sipData, sipMatches, sipRegex)) {
+				protocolInfo.sip_data = sipMatches[1];
+			}
+		}
+		data.protocolInfoVector->push_back(protocolInfo);
 	}
-	data.protocolInfoVector->push_back(protocolInfo);
 }
 
 void Flow::terminate()
 {
+	packetsFeature.median_packet_size = calculateMedian(packets_size);
+	packetsFeature.median_packet_interval = calculateMedian(interval_vec);
+	packetsFeature.std_packet_interval = calculateVariance(packets_size);
+	packetsFeature.std_packet_interval = calculateVariance(interval_vec);
+	packetsFeature.packet_size_skewness = calculateSkewness(packets_size);
+	packetsFeature.packet_size_kurtosis = calculateKurtosis(packets_size);
 	double duration = (double(latest_timestamp) - start_timestamp) / 1e9;//秒为单位
 	flowFeature.dur = duration;
 	// 计算吞吐率
 	if (latest_timestamp == start_timestamp) {
 		appbandwith = 0;
 	}else{
-		appbandwith = (double)packets_size_sum / duration * 8 / 1e3;//单位是kbps		
+		appbandwith = (double)packets_size_sum / duration * 8 / 1e3;//单位是kbps	
+
 	}
 
 	if (cnt_len_over_1000 >= 1)
@@ -522,8 +530,12 @@ void Flow::terminate()
 	flowFeature.thp = throughput;
 	flowFeature.cnt_len_over_1000 = cnt_len_over_1000;
 	flowFeature.pktcnt = pkt_count;
+	packet_cnt_of_pcap += pkt_count;
+	bytes_cnt_of_pcap += packets_size_sum;
 
 	flowFeature.bytes_of_flow = packets_size_sum;
+	packets_size_sum = 0;//统计的是一条流的字节数
+
 	flowFeature.header_of_packets = packets_size_sum - payload_size;
 	flowFeature.bytes_of_ret_packets = ret_bytes;
 	flowFeature.count_of_TCPpackets = tcp_packets;
@@ -801,4 +813,64 @@ bool isPrivateIP(const std::string& ipAddress) {
     }
 
     return false;
+}
+
+double calculateMedian(std::vector<double>& vec) {
+    size_t size = vec.size();
+    std::sort(vec.begin(), vec.end());
+    if (size % 2 == 0) {
+        return (vec[size / 2 - 1] + vec[size / 2]) / 2.0;
+    } else {
+        return vec[size / 2];
+    }
+}
+
+double calculateVariance(std::vector<double>& vec) {
+    double mean = std::accumulate(vec.begin(), vec.end(), 0.0) / vec.size();
+    double variance = 0.0;
+    for (int value : vec) {
+        variance += (value - mean) * (value - mean);
+    }
+    return variance / vec.size();
+}
+
+double calculateSkewness(const std::vector<double>& packets_size) {
+    if (packets_size.size() < 3) {
+        // 数据量太少，无法计算偏度
+        return std::nan("");
+    }
+    double mean = std::accumulate(packets_size.begin(), packets_size.end(), 0.0) / packets_size.size();
+    
+    double variance = 0.0;
+    for (double value : packets_size) {
+        variance += (value - mean) * (value - mean);
+    }
+    variance /= packets_size.size();
+    double stdDev = std::sqrt(variance);
+    double skewness = 0.0;
+    for (double value : packets_size) {
+        skewness += std::pow((value - mean) / stdDev, 3);
+    }
+    skewness *= packets_size.size() / ((packets_size.size() - 1) * (packets_size.size() - 2));
+    return skewness;
+}
+double calculateKurtosis(const std::vector<double>& packets_size) {
+    size_t n = packets_size.size();
+    if (n < 4) {
+        // 数据量太少，无法计算峰度
+        return std::nan("");
+    }
+    double mean = std::accumulate(packets_size.begin(), packets_size.end(), 0.0) / n;
+    double variance = 0.0;
+    for (double value : packets_size) {
+        variance += (value - mean) * (value - mean);
+    }
+    variance /= n;
+    double stdDev = std::sqrt(variance);
+    double kurtosis = 0.0;
+    for (double value : packets_size) {
+        kurtosis += std::pow((value - mean) / stdDev, 4);
+    }
+    kurtosis = (kurtosis * n * (n + 1) / ((n - 1) * (n - 2) * (n - 3))) - (3 * std::pow(n - 1, 2) / ((n - 2) * (n - 3)));
+    return kurtosis;
 }
