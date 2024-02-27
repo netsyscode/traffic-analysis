@@ -80,13 +80,13 @@ struct FlowFeature
 	double udp_nopayload_rate;//没有payload的udp包比例
 	double ret_rate; //重传比例
 	double ave_rtt, rtt_min, rtt_max, rtt_range; //rtt均值，极值, 极差
-
+ 
 	//新增协议
 	//流特征
 	long long bytes_of_flow, bytes_of_payload, header_of_packets, bytes_of_ret_packets;
 	int count_of_TCPpackets, count_of_UDPpackets, count_of_ICMPpackets;
 	int max_size_of_packet, min_size_of_packet;
-	double std_of_packet_size, end_to_end_latency, avg_window_size, avg_ttl, avg_payload_size, peak_traffic;
+	double end_to_end_latency, avg_window_size, avg_ttl, avg_payload_size;
 	int count_of_ret_packets, count_of_syn_packets, count_of_fin_packets, count_of_rst_packets, count_of_ack_packets, count_of_psh_packets, count_of_urg_packets;
 	double entropy_of_payload;
 	int count_of_forward_packets, count_of_backward_packets;
@@ -140,7 +140,7 @@ struct FlowFeature
 
 		bytes_of_flow(0), bytes_of_payload(0), header_of_packets(0), bytes_of_ret_packets(0),
 		count_of_TCPpackets(0), count_of_UDPpackets(0), count_of_ICMPpackets(0),
-		std_of_packet_size(0.0), end_to_end_latency(0.0), avg_window_size(0.0), avg_ttl(0.0), avg_payload_size(0.0),peak_traffic(0.0),
+		end_to_end_latency(0.0), avg_window_size(0.0), avg_ttl(0.0), avg_payload_size(0.0),
 		count_of_ret_packets(0), count_of_syn_packets(0), count_of_fin_packets(0), count_of_rst_packets(0), count_of_ack_packets(0), count_of_psh_packets(0), count_of_urg_packets(0),
 		entropy_of_payload(0.0),
 		count_of_forward_packets(0), count_of_backward_packets(0),
@@ -209,7 +209,7 @@ struct ProtocolInfo {
     uint8_t ip_fragmentation_flag = 0;
     uint16_t ip_identifier = 0;
     uint8_t* ipv6_flow_label = nullptr;
-    std::string ipv6_next_header = "TCP";
+    uint8_t ipv6_next_header = 0;
     std::string wireless_network_ssid = "default_ssid";
 
     size_t tcp_header_length = 0;
@@ -309,7 +309,7 @@ public:
 
 std::string nanosecondsToDatetime(long long nanoseconds);
 double calculateMedian(std::vector<double>& vec);
-double calculateVariance(std::vector<double>& vec);
+double calculateStandardVariance(std::vector<double>& vec);
 FlowKey* generateFlowKey(const Packet* packet);
 void fillSessionKeyWithFlowKey(SessionKey& SessionKey, const FlowKey& flowKey,  bool fromClient);
 double calculateSkewness(const std::vector<double>& packets_size);
