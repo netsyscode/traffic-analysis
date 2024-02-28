@@ -19,18 +19,20 @@
 #include <climits>
 
 HandlePacketData data;
-PacketsFeature packetsFeature;
+PacketsFeature packetsFeature;// 包间特征
 uint64_t packet_cnt_of_pcap;
 uint64_t bytes_cnt_of_pcap;
-long long timestamp_of_first_packet = std::numeric_limits<long long>::max();
-long long timestamp_of_last_packet = std::numeric_limits<long long>::min();
+LL timestamp_of_first_packet = std::numeric_limits<LL>::max();
+LL timestamp_of_last_packet = std::numeric_limits<LL>::min();
 
-std::string nanosecondsToDatetime(long long nanoseconds);
+
 std::vector<double> calculatePercentiles(const std::vector<double>& a);
 std::vector<double> getFlowsValues(const HandlePacketData* data, const char fieldName[]);
 std::pair<std::map<u_int16_t, int>, std::map<u_int16_t, int>> countFlowsByPorts(const HandlePacketData* data);
 std::pair<std::map<std::string, int>, std::map<std::string, int>> countFlowsByIP(const HandlePacketData* data);
 std::vector<int> countActiveFlowsEveryFiveSeconds(const HandlePacketData* data);
+bool isDownloadSessions(const FlowKey key, const LL &payload_size); 
+
 static struct option TLSFingerprintingOptions[] =
 {
 	{"interface",  required_argument, 0, 'i'},
@@ -87,25 +89,6 @@ static void onApplicationInterrupted(void* cookie)
 	*shouldStop = true;
 }
 
-// /**
-//  * Write data about a single ClientHello/ServerHello packet to the output file.
-//  * This method takes the parsed packets and the TLS fingerprint as inputs, extracts the rest of the data such as IP addresses and TCP ports,
-//  * and writes a single row to the output file
-//  */
-// void writeToOutputFile(std::ofstream* outputFile, const Packet& parsedPacket, const std::string &tlsFPString, const std::string &tlsFPType)
-// {
-//     const char separator = '\t';
-// 	std::pair<IPAddress, IPAddress> ipSrcDest = getIPs(parsedPacket);
-// 	std::pair<uint16_t, uint16_t> tcpPorts = getTcpPorts(parsedPacket);
-
-// 	*outputFile <<
-// 		tlsFPString << separator <<
-// 		tlsFPType << separator <<
-// 		ipSrcDest.first.toString() << separator <<
-// 		tcpPorts.first << separator <<
-// 		ipSrcDest.second.toString() << separator <<
-// 		tcpPorts.second << std::endl;
-// }
 
 struct WholeFlowsFeature {
     std::vector<int> active_flow_count;
@@ -125,7 +108,7 @@ struct WholeFlowsFeature {
 /**
  * Write the column headers to the output file
  */
-void writeHeaderToOutputFile(std::ofstream& outputFile)
+void writeFlowFeatureHeaderToOutputFile(std::ofstream& outputFile)
 {
     const char separator = '\t';
 	outputFile <<						
@@ -255,28 +238,13 @@ void writeToOutputData(const HandlePacketData* data, std::vector<std::string> &t
 			toString.push_back(std::to_string(flowFeature->udp_nopayload_rate));//UDPwithoutPayloadRate
 			toString.push_back(std::to_string(flowFeature->ave_rtt));//RTT
 			toString.push_back(std::to_string(flowFeature->ret_rate));//RetransferRate
-			// *outputFile << flowFeature->bw << separator	
-			// 	<< flowFeature->dur << separator
-			// 	<< flowFeature->itvl << separator	
-			// 	<< flowFeature->pktcnt << separator
-			// 	<< flowFeature->pktlen << separator	;
-				//<< flowFeature->thp<< separator	;
-			// *outputFile << flowFeature->ave_pkt_size_under_300 << separator	 
-			// << flowFeature->ave_pkt_size_over_1000 << separator	
-				//<< flowFeature->payload_size << separator	
-				//<< flowFeature->payload_bandwidth << separator	
-				//<< flowFeature->udp_nopayload_rate<< separator	
-				//<< flowFeature->ave_rtt << separator	
-				//<< flowFeature->rtt_min << separator	
-				//<< flowFeature->rtt_max << separator	
-				// << flowFeature->rtt_range<< separator	
-				//<< flowFeature->ret_rate << separator	
-				//<< std::endl;
+			// *outputFile << flowFeature->bw << separator;
 		}
 	}
 }
 
-void insertDataIntoMySQL(const std::vector<std::string>& data) {
+// 将流特征写入数据库
+void insertFlowFeatureIntoMySQL(const std::vector<std::string>& data) {
     try {
         sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
         std::unique_ptr<sql::Connection> con(driver->connect("tcp://localhost:3306", "root", ""));
@@ -284,7 +252,7 @@ void insertDataIntoMySQL(const std::vector<std::string>& data) {
         con->setSchema("Dataset");
 
         std::unique_ptr<sql::Statement> stmt(con->createStatement());
-        stmt->execute("CREATE TABLE IF NOT EXISTS feature (appName VARCHAR(100), timeStamp DATETIME(6), srcIP VARCHAR(20), dstIP VARCHAR(20),srcPort INT, dstPort INT,\
+        stmt->execute("CREATE TABLE IF NOT EXISTS feature (app VARCHAR(100), timeStamp DATETIME(6), srcIP VARCHAR(20), dstIP VARCHAR(20),srcPort INT, dstPort INT,\
 			clientTlsVersion VARCHAR(10) ,clientCipherSuits VARCHAR(10), clientExtensions VARCHAR(10), clientSupportedGroups VARCHAR(10), clientEcPointFormats VARCHAR(10),\
 			serverTlsVersion VARCHAR(10) ,serverCipherSuits VARCHAR(10), serverExtensions VARCHAR(10), appBandwidth DOUBLE, flowDuration DOUBLE,\
 			packetCount BIGINT, packetLengthOfFlow BIGINT, packetLengthUnder300 DOUBLE, packetLengthOver1000 DOUBLE, UDPwithoutPayloadRate DOUBLE, RTT DOUBLE, retransferRate DOUBLE)");
@@ -328,12 +296,108 @@ void insertDataIntoMySQL(const std::vector<std::string>& data) {
             pstmt->executeUpdate();
         }
     } catch (sql::SQLException& e) {
-        std::cerr << "SQLException in insertDataIntoMySQL():" << std::endl
+        std::cerr << "SQLException in insertFlowFeatureIntoMySQL():" << std::endl
                   << "SQLState: " << e.getSQLState() << std::endl
                   << "Error Code: " << e.getErrorCode() << std::endl
                   << "Message: " << e.what() << std::endl;
     }
 }
+
+void insertProtocolInfoIntoMySQL(const ProtocolInfo& info) {
+    try {
+        sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
+        std::unique_ptr<sql::Connection> con(driver->connect("tcp://localhost:3306", "root", ""));
+
+        // Select the database schema
+        con->setSchema("YourDatabaseName");
+
+        // Create the table if it does not exist
+        std::unique_ptr<sql::Statement> stmt(con->createStatement());
+        stmt->execute("CREATE TABLE IF NOT EXISTS ProtocolInfo ("
+                      "mac_source VARCHAR(17), "
+                      "mac_destination VARCHAR(17), "
+                      "ethernet_type SMALLINT, "
+                      "vlan_id INT, "
+                      "mpls_label INT, "
+                      "pppoe_session_id SMALLINT, "
+                      "protocol_type VARCHAR(10), "
+                      "ip_version VARCHAR(4), "
+                      "ip_tos TINYINT, "
+                      "ip_header_checksum SMALLINT, "
+                      "ip_fragmentation_flag TINYINT, "
+                      "ip_identifier SMALLINT, "
+                      // Skip ipv6_flow_label as it needs special handling
+                      "ipv6_next_header TINYINT, "
+                      "wireless_network_ssid VARCHAR(32), "
+                      "tcp_header_length SMALLINT, "
+                      "tcp_window_size SMALLINT, "
+                      "syn_flag BOOLEAN, "
+                      "fin_flag BOOLEAN, "
+                      "rst_flag BOOLEAN, "
+                      "psh_flag BOOLEAN, "
+                      "urg_flag BOOLEAN, "
+                      "tcp_sequence_number INT, "
+                      "tcp_acknowledgement_number INT, "
+                      "udp_header_length SMALLINT, "
+                      "udp_checksum SMALLINT, "
+                      "icmp_type TINYINT, "
+                      "icmp_code INT, "
+                      "arp_request BOOLEAN, "
+                      "arp_reply BOOLEAN, "
+                      // Skipping dns_query_type, smtp_command, dhcp_message_type, sip_data for simplicity
+                      "PRIMARY KEY(mac_source, mac_destination))");
+
+        // Prepare an SQL statement for inserting data into the table
+        std::unique_ptr<sql::PreparedStatement> pstmt;
+        pstmt.reset(con->prepareStatement("INSERT INTO ProtocolInfo (mac_source, mac_destination, ethernet_type, vlan_id, mpls_label, pppoe_session_id, protocol_type, "
+                                          "ip_version, ip_tos, ip_header_checksum, ip_fragmentation_flag, ip_identifier, ipv6_next_header, wireless_network_ssid, tcp_header_length, "
+                                          "tcp_window_size, syn_flag, fin_flag, rst_flag, psh_flag, urg_flag, tcp_sequence_number, tcp_acknowledgement_number, udp_header_length, "
+                                          "udp_checksum, icmp_type, icmp_code, arp_request, arp_reply) "
+                                          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
+
+        // Bind data to the prepared statement
+        pstmt->setString(1, info.mac_source);
+        pstmt->setString(2, info.mac_destination);
+        pstmt->setInt(3, info.ethernet_type);
+        pstmt->setInt(4, info.vlan_id);
+        pstmt->setInt(5, info.mpls_label);
+        pstmt->setInt(6, info.pppoe_session_id);
+        pstmt->setString(7, info.protocol_type);
+        pstmt->setString(8, info.ip_version);
+        pstmt->setInt(9, info.ip_tos);
+        pstmt->setInt(10, info.ip_header_checksum);
+        pstmt->setInt(11, info.ip_fragmentation_flag);
+        pstmt->setInt(12, info.ip_identifier);
+        // Skipping ipv6_flow_label
+        pstmt->setInt(13, info.ipv6_next_header);
+        pstmt->setString(14, info.wireless_network_ssid);
+        pstmt->setInt(15, info.tcp_header_length);
+        pstmt->setInt(16, info.tcp_window_size);
+        pstmt->setBoolean(17, info.syn_flag);
+        pstmt->setBoolean(18, info.fin_flag);
+        pstmt->setBoolean(19, info.rst_flag);
+        pstmt->setBoolean(20, info.psh_flag);
+        pstmt->setBoolean(21, info.urg_flag);
+        pstmt->setInt(22, info.tcp_sequence_number);
+        pstmt->setInt(23, info.tcp_acknowledgement_number);
+        pstmt->setInt(24, info.udp_header_length);
+        pstmt->setInt(25, info.udp_checksum);
+        pstmt->setInt(26, info.icmp_type);
+        pstmt->setInt(27, info.icmp_code);
+        pstmt->setBoolean(28, info.arp_request);
+        pstmt->setBoolean(29, info.arp_reply);
+
+        // Execute the prepared statement
+        pstmt->executeUpdate();
+
+    } catch (sql::SQLException& e) {
+        std::cerr << "SQLException in insertProtocolInfoIntoMySQL():" << std::endl
+                  << "SQLState: " << e.getSQLState() << std::endl
+                  << "Error Code: " << e.getErrorCode() << std::endl
+                  << "Message: " << e.what() << std::endl;
+    }
+}
+
 
 /**
  * Handle an intercepted packet: identify if it's a ClientHello or ServerHello packets, extract the TLS fingerprint and write it to the output file
@@ -439,8 +503,12 @@ void handlePacket(RawPacket* rawPacket, const HandlePacketData* data)
 void calculateFlowFeature(const HandlePacketData* data)
 {
 	if (data->flows->size() >= 1) {
+		// 处理每一条流
 		for (auto it = data->flows->begin(); it != data->flows->end(); ++it) {
-			it->second->terminate();
+			bool download_flag = false; 
+			if(isDownloadSessions(it->second->flowKey, it->second->payload_size))
+				download_flag = true;
+			it->second->terminate(download_flag);
 			// build SeesionKey from FlowKey, add TLS fingerprint to flow feature
 			SessionKey sessionKey;
 	
@@ -477,29 +545,6 @@ void calculateWholeFlowFeature(const HandlePacketData* data){
 	packetsFeature.packet_rate = bytes_cnt_of_pcap  / (timestamp_of_last_packet - timestamp_of_first_packet) * 1e9;
 
 }
-
-
-// void calculateFlowFeature(const HandlePacketData* data)
-// {
-// 	if (data->flows->size() >= 1) {
-// 		std::map<FlowKey, Flow>::iterator it;
-// 		std::vector<FlowFeature> flowFeatures;
-// 		for (auto it = data->flows->begin(); it != data->flows->end(); ++it) {
-// 			it->second->terminate();
-// 			// build SeesionKey from FlowKey, add TLS fingerprint to flow feature
-// 			SessionKey sessionKey;
-// 			fillSessionKeyWithFlowKey(sessionKey, it->first, true);
-// 			if (data->stats->find(sessionKey) != data->stats->end()) {
-// 				it->second->flowFeature.tlsFingerprint = data->stats->at(sessionKey);
-// 			} else {
-// 				fillSessionKeyWithFlowKey(sessionKey, it->first, false);
-// 				if (data->stats->find(sessionKey) != data->stats->end())
-// 					it->second->flowFeature.tlsFingerprint = data->stats->at(sessionKey);
-// 			}
-// 		}
-// 	}
-// }
-
 
 void classficationFlows(const HandlePacketData* data, SVMPredictor* model)
 {
@@ -579,7 +624,7 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 	}
 
 	// write the column headers to the output file
-	writeHeaderToOutputFile(outputFile);
+	writeFlowFeatureHeaderToOutputFile(outputFile);
 
 	// set BPF filter if provided by the user
 	if (!bpfFilter.empty())
@@ -629,7 +674,7 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 	calculateFlowFeature(&data);
 	calculateWholeFlowFeature(&data);
 	writeToOutputData(&data, toString, fileNameWithoutExtension);
-	//insertDataIntoMySQL(toString);
+	//insertFlowFeatureIntoMySQL(toString);
 	std::cout << "Having written " << toString.size() / 4 << " rows into the table\n\n";
 
 	SVMPredictor predictor(modelPath, 1.0/24.0);
@@ -694,7 +739,7 @@ void doTlsFingerprintingOnLiveTraffic(const std::string& interfaceNameOrIP, std:
 	}
 
 	// write the column headers to the output file
-	writeHeaderToOutputFile(outputFile);
+	writeFlowFeatureHeaderToOutputFile(outputFile);
 
 	// set BPF filter if provided by the user
 	if (!bpfFilter.empty())
@@ -790,7 +835,7 @@ std::vector<int> countActiveFlowsEveryFiveSeconds(const HandlePacketData* data) 
     if (data == nullptr || data->flows == nullptr) return {};
 
     // 找出所有流中最早和最晚的时间戳
-    long long minStart = LONG_LONG_MAX, maxEnd = LONG_LONG_MIN;
+    LL minStart = LONG_LONG_MAX, maxEnd = LONG_LONG_MIN;
     for (const auto& pair : *data->flows) {
         const Flow* flow = pair.second;
         minStart = std::min(minStart, flow->start_timestamp);
@@ -818,3 +863,16 @@ std::vector<int> countActiveFlowsEveryFiveSeconds(const HandlePacketData* data) 
     return activeFlows;
 }
 
+// 统计下载会话
+bool isDownloadSessions(const FlowKey key, const LL &payload_size) {
+        size_t downloadDataSize = 0;
+        // 假设下载流量主要通过HTTP/HTTPS，即端口80或443
+        if (key.dstPort == 80 || key.dstPort == 443) {
+            downloadDataSize += payload_size;
+            // 如果下行数据量超过某个阈值，认为是下载会话
+            if (downloadDataSize > DOWNLOAD_DATA_THRESHOLD) {
+                return true;
+            }
+    }
+    return false;
+}

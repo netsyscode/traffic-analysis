@@ -4,8 +4,8 @@
 #include <regex>
 
 extern HandlePacketData data;
-extern long long timestamp_of_first_packet;
-extern long long timestamp_of_last_packet;
+extern LL timestamp_of_first_packet;
+extern LL timestamp_of_last_packet;
 extern uint64_t packet_cnt_of_pcap;
 extern uint64_t bytes_cnt_of_pcap;
 extern PacketsFeature packetsFeature;
@@ -368,43 +368,49 @@ void Flow::updateFeature(RawPacket* pkt) {
 		packetBuffer = seqNumber;
 		ackBuffer = acknoNumber;
 
-		//只有syn包会执行
+		// 第一步握手syn包会执行
         if (tcpHeader->synFlag && !tcpHeader->ackFlag) {
 			long sec = pkt->getPacketTimeStamp().tv_sec;
 			long nsec = pkt->getPacketTimeStamp().tv_nsec;
-			seqToTime[seqNumber] = sec * 1000000000LL + nsec;
+			synSeqToTime[seqNumber] = sec * 1000000000LL + nsec;
         }
 
+		//fin包会执行
+        if (tcpHeader->finFlag) {
+			long sec = pkt->getPacketTimeStamp().tv_sec;
+			long nsec = pkt->getPacketTimeStamp().tv_nsec;
+			finSeqToTime[seqNumber] = sec * 1000000000LL + nsec;
+        }
+
+		// 收到了确认包
 		if (tcpHeader->ackFlag) {
 			// 判断这个包是否是建立tcp连接第三步握手的ack包
-            if (seqToTime.count(seqNumber - 1) > 0) {
-					uint64_t synTime = seqToTime[seqNumber - 1];
-					uint64_t synAckTime = latest_timestamp;
-					rtts.push_back(double(synAckTime - synTime) / 1e9);
+            if (synSeqToTime.count(seqNumber - 1) > 0) {
+				uint64_t synTime = synSeqToTime[seqNumber - 1];
+				uint64_t synAckTime = latest_timestamp;
+				rtts.push_back(double(synAckTime - synTime) / 1e9);
 
-					// 认为a->b的RTT与b->a的RTT相同
-					auto key = this->flowKey;
-					FlowKey keyPal = {key.dstIP, key.srcIP, key.dstPort, key.srcPort};
-					std::map<FlowKey, Flow*>::iterator flowIter = data.flows->find(keyPal);
-					if (flowIter != data.flows->end())
-						flowIter->second->rtts.push_back(double(synAckTime - synTime) / 1e9);
-					//seqToTime.erase(seqNumber - 1);
-            }
+				// 认为a->b的RTT与b->a的RTT相同
+				auto key = this->flowKey;
+				FlowKey keyPal = {key.dstIP, key.srcIP, key.dstPort, key.srcPort};
+				std::map<FlowKey, Flow*>::iterator flowIter = data.flows->find(keyPal);
+				if (flowIter != data.flows->end())
+					flowIter->second->rtts.push_back(double(synAckTime - synTime) / 1e9);
+			}
+
+			// 如果是第二步挥手
+			if(finSeqToTime.count(acknoNumber - 1) > 0) {
+				uint64_t finTime = finSeqToTime[acknoNumber - 1];
+				uint64_t finAckTime = latest_timestamp;
+				fin_ack_vec.push_back((finAckTime - finTime) / 1e9);
+			}
 			
 			// 统计第一步握手和第二步握手的时间差
-			if (tcpLayer->getTcpHeader()->synFlag && tcpLayer->getTcpHeader()->ackFlag) {
-				if (seqToTime.count(seqNumber - 1) > 0) {
-					auto key = this->flowKey;
-					FlowKey keyPal = {key.dstIP, key.srcIP, key.dstPort, key.srcPort};
-					std::map<FlowKey, Flow*>::iterator flowIter = data.flows->find(keyPal);
-					if (flowIter != data.flows->end()){
-						uint64_t synTime = flowIter->second->start_timestamp;
-						//synTime = seqToTime[seqNumber - 1];
-						long sec = pkt->getPacketTimeStamp().tv_sec;
-						long nsec = pkt->getPacketTimeStamp().tv_nsec;
-						uint64_t synAckTime = sec * 1000000000LL + nsec;
-						packetsFeature.syn_ack_time = double(synAckTime - synTime) / 1e9;//算出来的应该是发起会话的RRT
-					}
+			if (tcpHeader->synFlag) {
+				if (synSeqToTime.count(acknoNumber - 1) > 0) {
+					uint64_t synTime =  finSeqToTime[acknoNumber - 1];
+					uint64_t synAckTime = latest_timestamp;
+					syn_ack_vec.push_back((synAckTime - synTime) / 1e9);
 				}
 			}
 		}
@@ -632,8 +638,8 @@ void Flow::updateFeature(RawPacket* pkt) {
 		data.protocolInfoVector->push_back(protocolInfo);
 }
 
-// 流结束时统计其他的流特征
-void Flow::terminate()
+// 一条流的特征
+void Flow::terminate(bool download_flag)
 {
 	// 包长的中位数、标准差、偏度和峰度
 	packetsFeature.median_packet_size = calculateMedian(packets_size);
@@ -725,7 +731,16 @@ void Flow::terminate()
 	flowFeature.avg_payload_size = static_cast<double>(payload_size) / pkt_count;
 	flowFeature.count_of_ret_packets = ret;
 	flowFeature.entropy_of_payload = calculateEntropy(frequencyMap);
+
 	flowFeature.videoMetrics.bitrate = flowFeature.bytes_of_flow / flowFeature.dur;
+
+	// 如果是下载流
+	if(download_flag) {
+		flowFeature.downloadMetrics.download_session_count++;
+		flowFeature.downloadMetrics.duration += flowFeature.dur;
+		flowFeature.downloadMetrics.download_bytes += flowFeature.bytes_of_flow;
+		flowFeature.downloadMetrics.packet_loss_count += flowFeature.count_of_ret_packets;
+	}
 
 }
 
@@ -829,7 +844,7 @@ void fillSessionKeyWithFlowKey(SessionKey& sessionKey, const FlowKey& flowKey, b
 }
 
 // 将时间戳转换为形如2000-00-00:000000的时间
-std::string nanosecondsToDatetime(long long nanoseconds) {
+std::string nanosecondsToDatetime(LL nanoseconds) {
     auto seconds = nanoseconds / 1000000000;
     auto nanosec = nanoseconds % 1000000000;
     std::chrono::system_clock::time_point tp = std::chrono::system_clock::from_time_t(seconds);

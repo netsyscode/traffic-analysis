@@ -28,13 +28,14 @@
 #include <pcapplusplus/SipLayer.h>
 #include "tls_features.h"
 
-
+typedef long long LL; 
 #define EXPIRED_UPDATE 40
 #define SEGMENT_WINDOWS_SIZE 3
 //定义连续的时间范围内
 #define CLUMP_TIMEOUT 1
 //连续发送多个包的最小值
 #define BULK_BOUND 4
+#define DOWNLOAD_DATA_THRESHOLD 1024 * 1024
 
 #define ACTIVE_TIMEOUT 0.005
 using namespace pcpp;
@@ -47,7 +48,7 @@ enum FlowDirection
 struct FlowKey
 {
 	IPAddress srcIP, dstIP; 			/* 源/目的IP */
-	u_int16_t srcPort, dstPort;			/* 源/目的端口号 */
+	uint16_t srcPort, dstPort;			/* 源/目的端口号 */
 
 	std::string toString() const;
 	bool operator< (const struct FlowKey& e) const;
@@ -59,14 +60,11 @@ struct FlowFeature
 {
 	TLSFingerprint* tlsFingerprint = nullptr;
 	IPAddress srcIP, dstIP;
-	u_int16_t srcPort, dstPort;
+	uint16_t srcPort, dstPort;
 	double startts, endts;			// 开始时间，结束时间
-	long long pktcnt;				// 包数
+	LL pktcnt;				// 包数
 	double pktlen, applen;			// 包长，应用层长度
 	double itvl, bw, appbw, thp, dur;	// 包间隔，带宽，应用层带宽，吞吐率
-	// int valid = 0;
-	bool same_len;
-	
 	// 只比较吞吐量
 	bool operator<(const struct FlowFeature &other)const {
 		return thp < other.thp;
@@ -83,7 +81,7 @@ struct FlowFeature
  
 	//新增协议
 	//流特征
-	long long bytes_of_flow, bytes_of_payload, header_of_packets, bytes_of_ret_packets;
+	LL bytes_of_flow, bytes_of_payload, header_of_packets, bytes_of_ret_packets;
 	int count_of_TCPpackets, count_of_UDPpackets, count_of_ICMPpackets;
 	int max_size_of_packet, min_size_of_packet;
 	double end_to_end_latency, avg_window_size, avg_ttl, avg_payload_size;
@@ -107,17 +105,18 @@ struct FlowFeature
 	VideoStreamMetrics videoMetrics;
 
 	struct DownloadMetrics {
-		double duration;
-		double traffic_ratio;
-		double average_download_rate;
-		double packet_loss_rate;
-		double retransmitted_packets_ratio;
-		int session_count;
-		int parallel_threads;
-		double request_response_delay;
-		int segmented_download_behavior;
-		int resume_capability;
-		double peak_trough_traffic;
+		LL download_bytes = 0;
+		double duration = 0.0;
+		double traffic_ratio= 0.0;
+		double average_download_rate= 0.0;
+		int packet_loss_count = 0;
+		double retransmitted_packets_ratio= 0.0;
+		int download_session_count = 0;
+		int parallel_threads= 0;
+		double request_response_delay= 0.0;
+		int segmented_download_behavior= 0;
+		int resume_capability= 0;
+		double peak_trough_traffic= 0.0;
 	};
 	DownloadMetrics downloadMetrics;
 
@@ -128,7 +127,6 @@ struct FlowFeature
         pktcnt(0),
         pktlen(0.0), applen(0.0),
         itvl(0.0), bw(0.0), appbw(0.0), thp(0.0),dur(0.0),
-        same_len(false),
         score(0.0),
         ave_pkt_size_over_1000(0.0),
         ave_pkt_size_under_300(0.0),
@@ -144,8 +142,8 @@ struct FlowFeature
 		count_of_ret_packets(0), count_of_syn_packets(0), count_of_fin_packets(0), count_of_rst_packets(0), count_of_ack_packets(0), count_of_psh_packets(0), count_of_urg_packets(0),
 		entropy_of_payload(0.0),
 		count_of_forward_packets(0), count_of_backward_packets(0),
-		videoMetrics{0.0, "Unknown", 0.0, "Unknown", "Unknown", "Unknown", false, false, 0.0, false, false},
-		downloadMetrics{0.0, 0.0, 0.0, 0.0, 0.0, 0, 0, 0.0, 0, 0, 0.0}
+		videoMetrics{0.0, "Unknown", 0.0, "Unknown", "Unknown", "Unknown", false, false, 0.0, false, false}
+		//downloadMetrics{0.0, 0.0, 0.0, 0.0, 0.0, 0, 0, 0.0, 0, 0, 0.0}
     {}
 };
 
@@ -219,8 +217,8 @@ struct ProtocolInfo {
 	bool rst_flag = false;
 	bool psh_flag = false;
 	bool urg_flag = false;
-    u_int32_t tcp_sequence_number = 0;
-    u_int32_t tcp_acknowledgement_number = 0;
+    uint32_t tcp_sequence_number = 0;
+    uint32_t tcp_acknowledgement_number = 0;
     uint16_t udp_header_length = 0;
     uint16_t udp_checksum = 0;
     uint8_t icmp_type = 0;
@@ -266,7 +264,6 @@ struct PacketsFeature
 	double fin_ack_time = 0.0;
 	double psh_between_time = 0.0;
 	double urg_between_time = 0.0;
-
 };
 
 
@@ -279,9 +276,9 @@ public:
 	SinglePacketInfo packetInfo;
 	std::vector<RawPacket*> packets;//记录一条流的所有包
 	//用于计算流特征
-	long long latest_timestamp, latter_timestamp, interarrival_time_n, interarrival_time_ls, flow_duration, start_timestamp, used_ts;
+	LL latest_timestamp, latter_timestamp, interarrival_time_n, interarrival_time_ls, flow_duration, start_timestamp, used_ts;
 	int pkt_count,rtt_count, window_size_ls, retrans, ack_no_payload, ttl;
-	long long packets_size_sum, app_packets_size_sum, header_len_ls;
+	LL packets_size_sum, app_packets_size_sum, header_len_ls;
 	double bandwith, appbandwith ,throughput, duration;
 	double ave_pkt_size, app_ave_pkt_size,ave_interval, ave_windows, ave_rtt, rtt_min, rtt_max, interval_ls, rtt_ls;
 	int tcp_packets, udp_packets, icmp_packets;
@@ -289,25 +286,28 @@ public:
 	Flow(FlowKey flowKey);
 	void updateFeature(RawPacket* pkt);
 	void addPacket(RawPacket* pkt);
-	void terminate();
+	void terminate(bool flag);
 
 	std::map<uint8_t, int> frequencyMap;
 	int udp_nopayload_cnt;
 	int cnt_len_over_1000, ave_pkt_size_over_1000;
 	int cnt_len_under_300,ave_pkt_size_under_300;
-	long long int payload_size, ret_bytes;
+	LL payload_size, ret_bytes;
 	double payload_bandwidth;
-	std::map<uint32_t, uint64_t> seqToTime; //每条流都含有一个
-	u_int64_t packetBuffer;
-	u_int64_t ackBuffer;
+	std::map<uint32_t, uint64_t> synSeqToTime; //每条流都含有一个
+	std::map<uint32_t, uint64_t> finSeqToTime; //每条流都含有一个
+	uint64_t packetBuffer;
+	uint64_t ackBuffer;
 	std::vector<double> rtts;
 	RawPacket* pkt;
 	int ret;
 	std::vector<double> packets_size;
 	std::vector<double> interval_vec;
+	std::vector<double> syn_ack_vec;
+	std::vector<double> fin_ack_vec;
 };
 
-std::string nanosecondsToDatetime(long long nanoseconds);
+std::string nanosecondsToDatetime(LL nanoseconds);
 double calculateMedian(std::vector<double>& vec);
 double calculateStandardVariance(std::vector<double>& vec);
 FlowKey* generateFlowKey(const Packet* packet);
