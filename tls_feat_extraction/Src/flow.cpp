@@ -3,15 +3,6 @@
 #include <algorithm>
 #include <regex>
 
-extern HandlePacketData data;
-extern LL timestamp_of_first_packet;
-extern LL timestamp_of_last_packet;
-extern uint64_t packet_cnt_of_pcap;
-extern uint64_t bytes_cnt_of_pcap;
-extern PacketsFeature packetsFeature;
-
-uint32_t sps_parser_offset;
-uint8_t sps_parser_base64_table[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 size_t sps_parser_base64_decode(char *buffer) {
 	uint8_t dtable[256], block[4], tmp, pad = 0;
 	size_t i, count = 0, pos = 0, len = strlen(buffer);
@@ -270,7 +261,9 @@ double calculateEntropy(const std::map<uint8_t, int>& frequencyMap) {
 //更新相关特征
 void Flow::updateFeature(RawPacket* pkt) {
 	int pktLen = pkt->getFrameLength();
-	packetInfo.packet_length = pktLen;
+
+	SinglePacketInfo singlePacketInfo;
+	singlePacketInfo.packet_length = pktLen;
 	packets_size.push_back(pktLen);
 	//统计包长大于1000的包数量
 	if (pktLen > 1000) {
@@ -298,7 +291,7 @@ void Flow::updateFeature(RawPacket* pkt) {
 	latest_timestamp = sec * 1000000000LL + nsec;
 	timestamp_of_last_packet = std::max(timestamp_of_last_packet, latest_timestamp);
 	
-	packetInfo.arrival_timestamp = nanosecondsToDatetime(latest_timestamp);
+	singlePacketInfo.arrival_timestamp = nanosecondsToDatetime(latest_timestamp);
 
 	// 计算相邻两个包间时延
 	if(latest_timestamp != latter_timestamp){
@@ -308,6 +301,7 @@ void Flow::updateFeature(RawPacket* pkt) {
 		packetsFeature.min_interval_between_packets = std::min(packetsFeature.min_interval_between_packets, diff);
 	}
 
+	ProtocolInfo protocolInfo;
 	pcpp::Packet parsedPacket(pkt);
 	pcpp::TcpLayer* tcpLayer = parsedPacket.getLayerOfType<pcpp::TcpLayer>();
 
@@ -320,7 +314,7 @@ void Flow::updateFeature(RawPacket* pkt) {
 		
 		tcp_packets ++;
         size_t tcpPayloadLength = tcpLayer->getLayerPayloadSize();
-		packetInfo.payload_size = tcpPayloadLength;
+		singlePacketInfo.payload_size = tcpPayloadLength;
 		
 		// 如果有TCP负载则计算负载的熵
 		if(tcpPayloadLength > 0){
@@ -330,7 +324,7 @@ void Flow::updateFeature(RawPacket* pkt) {
                 frequencyMap[payload[i]]++;
 				frequencyPacketMap[payload[i]]++;
             }
-			packetInfo.payload_entropy = calculateEntropy(frequencyPacketMap);
+			singlePacketInfo.payload_entropy = calculateEntropy(frequencyPacketMap);
 		}
         payload_size += tcpPayloadLength;
 		
@@ -418,6 +412,12 @@ void Flow::updateFeature(RawPacket* pkt) {
 		// 统计与HTTP请求相关的特征
 		pcpp::HttpRequestLayer* httpRequestLayer = parsedPacket.getLayerOfType<pcpp::HttpRequestLayer>();
         if (httpRequestLayer != nullptr) {
+
+			// 检测是否是具有断点续传能力
+			if(downloadMetrics.resume_downloading)
+				if(checkForRangeHeader(pkt))
+					downloadMetrics.resume_downloading = true;
+
 			HttpRequest webrequest;
 			webrequest.url = httpRequestLayer->getFirstLine()->getUri();
 			webrequest.method = httpRequestLayer->getFirstLine()->getMethod();
@@ -493,7 +493,7 @@ void Flow::updateFeature(RawPacket* pkt) {
 			protocolInfo.udp_header_length = udpHeadr->length;
 			protocolInfo.udp_checksum = udpHeadr->headerChecksum;
 			size_t udpPayloadLength = udpLayer->getLayerPayloadSize();
-			packetInfo.payload_size = udpPayloadLength;
+			singlePacketInfo.payload_size = udpPayloadLength;
 
 			// 如果UDP有负载
 			if(udpPayloadLength > 0){
@@ -636,6 +636,7 @@ void Flow::updateFeature(RawPacket* pkt) {
 			}
 		}
 		data.protocolInfoVector->push_back(protocolInfo);
+		data.singlePacketInfoVector->push_back(singlePacketInfo);
 }
 
 // 一条流的特征
@@ -732,16 +733,15 @@ void Flow::terminate(bool download_flag)
 	flowFeature.count_of_ret_packets = ret;
 	flowFeature.entropy_of_payload = calculateEntropy(frequencyMap);
 
-	flowFeature.videoMetrics.bitrate = flowFeature.bytes_of_flow / flowFeature.dur;
+	videoMetrics.bitrate = flowFeature.bytes_of_flow / flowFeature.dur;
 
 	// 如果是下载流
 	if(download_flag) {
-		flowFeature.downloadMetrics.download_session_count++;
-		flowFeature.downloadMetrics.duration += flowFeature.dur;
-		flowFeature.downloadMetrics.download_bytes += flowFeature.bytes_of_flow;
-		flowFeature.downloadMetrics.packet_loss_count += flowFeature.count_of_ret_packets;
+		downloadMetrics.download_session_count++;
+		downloadMetrics.duration += flowFeature.dur;
+		downloadMetrics.download_bytes += flowFeature.bytes_of_flow;
+		downloadMetrics.packet_loss_count += flowFeature.count_of_ret_packets;
 	}
-
 }
 
 std::string FlowKey::toString() const
@@ -1104,4 +1104,24 @@ uint8_t* extract_sps_from_rtp(uint8_t* rtp_payload, size_t payload_length, size_
     }
     // 未找到SPS NALU
     return NULL;
+}
+
+// HTTP
+bool checkForRangeHeader(const pcpp::Packet& packet) {
+    auto* httpLayer = packet.getLayerOfType<pcpp::HttpRequestLayer>();
+    if (httpLayer != nullptr) {
+        // 检查请求是否包含Range头
+        if (httpLayer->getFieldByName("Range") != nullptr) {
+            return true;
+        }
+    }
+
+    auto* httpResponseLayer = packet.getLayerOfType<pcpp::HttpResponseLayer>();
+    if (httpResponseLayer != nullptr) {
+        // 检查响应是否包含Content-Range头
+        if (httpResponseLayer->getFieldByName("Content-Range") != nullptr) {
+            return true;
+        }
+    }
+    return false;
 }

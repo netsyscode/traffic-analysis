@@ -89,37 +89,6 @@ struct FlowFeature
 	double entropy_of_payload;
 	int count_of_forward_packets, count_of_backward_packets;
 
-	struct VideoStreamMetrics {
-		double bitrate;
-		std::string resolution;
-		double frame_rate;
-		std::string video_codec;
-		std::string audio_codec;
-		std::string packet_pattern;
-		bool is_bursty;
-		bool is_multiplexed;
-		double bandwidth_usage;
-		bool long_duration_connection;
-		bool buffering_behavior;
-	};
-	VideoStreamMetrics videoMetrics;
-
-	struct DownloadMetrics {
-		LL download_bytes = 0;
-		double duration = 0.0;
-		double traffic_ratio= 0.0;
-		double average_download_rate= 0.0;
-		int packet_loss_count = 0;
-		double retransmitted_packets_ratio= 0.0;
-		int download_session_count = 0;
-		int parallel_threads= 0;
-		double request_response_delay= 0.0;
-		int segmented_download_behavior= 0;
-		int resume_capability= 0;
-		double peak_trough_traffic= 0.0;
-	};
-	DownloadMetrics downloadMetrics;
-
 	FlowFeature() : 
         tlsFingerprint(nullptr),
         srcPort(0), dstPort(0),
@@ -141,11 +110,27 @@ struct FlowFeature
 		end_to_end_latency(0.0), avg_window_size(0.0), avg_ttl(0.0), avg_payload_size(0.0),
 		count_of_ret_packets(0), count_of_syn_packets(0), count_of_fin_packets(0), count_of_rst_packets(0), count_of_ack_packets(0), count_of_psh_packets(0), count_of_urg_packets(0),
 		entropy_of_payload(0.0),
-		count_of_forward_packets(0), count_of_backward_packets(0),
-		videoMetrics{0.0, "Unknown", 0.0, "Unknown", "Unknown", "Unknown", false, false, 0.0, false, false}
+		count_of_forward_packets(0), count_of_backward_packets(0)
+		// videoMetrics{0.0, "Unknown", 0.0, "Unknown", "Unknown", "Unknown", false, false, 0.0, false, false}
 		//downloadMetrics{0.0, 0.0, 0.0, 0.0, 0.0, 0, 0, 0.0, 0, 0, 0.0}
     {}
 };
+
+struct WholeFlowsFeature {
+    std::vector<int> active_flow_count;
+    std::vector<double> duration_distribution;
+    std::vector<double> packet_count_distribution;
+    std::vector<double> byte_size_distribution;
+	std::pair<std::map<std::string, int>, std::map<std::string, int>> flow_of_same_ip;
+    std::vector<double> average_packet_size_distribution;
+    std::vector<double> ttl_distribution;
+    std::vector<double> window_size_distribution;
+    std::pair<std::map<u_int16_t, int>, std::map<u_int16_t, int>> flow_of_same_port;
+	std::vector<double> end_to_end_lanteny_distribution;
+    std::vector<double> payload_entropy_distribution;
+    std::vector<double> flow_peak_traffic_distribution;
+};
+WholeFlowsFeature flowsFeature;
 
 struct HttpRequestHeader {
     std::string name;
@@ -240,7 +225,6 @@ struct SinglePacketInfo
 	std::string arrival_timestamp = "";
 };
 
-
 struct PacketsFeature
 {
 	double avg_packet_size = 0.0;
@@ -265,15 +249,45 @@ struct PacketsFeature
 	double psh_between_time = 0.0;
 	double urg_between_time = 0.0;
 };
+PacketsFeature packetsFeature;// 包间特征
 
+struct VideoStreamMetrics {
+	double bitrate;
+	std::string resolution;
+	double frame_rate;
+	std::string video_codec;
+	std::string audio_codec;
+	std::string packet_pattern;
+	bool is_bursty;
+	bool is_multiplexed;
+	double bandwidth_usage;
+	bool long_duration_connection;
+	bool buffering_behavior;
+};
+VideoStreamMetrics videoMetrics;
+
+struct DownloadMetrics {
+	LL download_bytes = 0;
+	double duration = 0.0;
+	double traffic_ratio= 0.0;
+	double average_download_rate= 0.0;
+	int packet_loss_count = 0;
+	double retransmitted_packets_ratio= 0.0;
+	int download_session_count = 0;
+	int parallel_threads = 0;
+	double request_response_delay= 0.0;
+	bool segmented_download = false;
+	bool resume_downloading = false;
+	double peak_trough_traffic = 0.0;
+};
+bool download_flag = false;
+DownloadMetrics downloadMetrics;
 
 class Flow
 {
 public:
 	FlowKey flowKey;
 	FlowFeature flowFeature;
-	ProtocolInfo protocolInfo;
-	SinglePacketInfo packetInfo;
 	std::vector<RawPacket*> packets;//记录一条流的所有包
 	//用于计算流特征
 	LL latest_timestamp, latter_timestamp, interarrival_time_n, interarrival_time_ls, flow_duration, start_timestamp, used_ts;
@@ -307,6 +321,16 @@ public:
 	std::vector<double> fin_ack_vec;
 };
 
+
+uint64_t packet_cnt_of_pcap;
+uint64_t bytes_cnt_of_pcap;
+LL timestamp_of_first_packet = std::numeric_limits<LL>::max();
+LL timestamp_of_last_packet = std::numeric_limits<LL>::min();
+std::vector<std::string> toString;
+
+uint32_t sps_parser_offset;
+uint8_t sps_parser_base64_table[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
 std::string nanosecondsToDatetime(LL nanoseconds);
 double calculateMedian(std::vector<double>& vec);
 double calculateStandardVariance(std::vector<double>& vec);
@@ -315,3 +339,5 @@ void fillSessionKeyWithFlowKey(SessionKey& SessionKey, const FlowKey& flowKey,  
 double calculateSkewness(const std::vector<double>& packets_size);
 double calculateKurtosis(const std::vector<double>& packets_size);
 uint8_t* extract_sps_from_rtp(uint8_t* rtp_payload, size_t payload_length, size_t* sps_length);
+bool checkForRangeHeader(const pcpp::Packet& packet);
+bool isResumedDownload(const std::vector<pcpp::Packet>& packets);

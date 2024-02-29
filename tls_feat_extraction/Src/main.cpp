@@ -18,13 +18,6 @@
 #include "predict.h"
 #include <climits>
 
-HandlePacketData data;
-PacketsFeature packetsFeature;// 包间特征
-uint64_t packet_cnt_of_pcap;
-uint64_t bytes_cnt_of_pcap;
-LL timestamp_of_first_packet = std::numeric_limits<LL>::max();
-LL timestamp_of_last_packet = std::numeric_limits<LL>::min();
-
 
 std::vector<double> calculatePercentiles(const std::vector<double>& a);
 std::vector<double> getFlowsValues(const HandlePacketData* data, const char fieldName[]);
@@ -88,22 +81,6 @@ static void onApplicationInterrupted(void* cookie)
 	bool* shouldStop = (bool*)cookie;
 	*shouldStop = true;
 }
-
-
-struct WholeFlowsFeature {
-    std::vector<int> active_flow_count;
-    std::vector<double> duration_distribution;
-    std::vector<double> packet_count_distribution;
-    std::vector<double> byte_size_distribution;
-	std::pair<std::map<std::string, int>, std::map<std::string, int>> flow_of_same_ip;
-    std::vector<double> average_packet_size_distribution;
-    std::vector<double> ttl_distribution;
-    std::vector<double> window_size_distribution;
-    std::pair<std::map<u_int16_t, int>, std::map<u_int16_t, int>> flow_of_same_port;
-	std::vector<double> end_to_end_lanteny_distribution;
-    std::vector<double> payload_entropy_distribution;
-    std::vector<double> flow_peak_traffic_distribution;
-};
 
 /**
  * Write the column headers to the output file
@@ -203,6 +180,7 @@ void writeToOutputData(const HandlePacketData* data, std::vector<std::string> &t
 			FlowKey flowKey = iter->first;
 			Flow* flow = iter->second;
 			const FlowFeature* flowFeature = &(flow->flowFeature);
+			// 每列元素
 			toString.push_back(tableName);
 			toString.push_back(nanosecondsToDatetime(flow->start_timestamp));//流起始时间
 			toString.push_back(flowKey.srcIP.toString());//源IP
@@ -244,13 +222,8 @@ void writeToOutputData(const HandlePacketData* data, std::vector<std::string> &t
 }
 
 // 将流特征写入数据库
-void insertFlowFeatureIntoMySQL(const std::vector<std::string>& data) {
+void insertFlowFeatureIntoMySQL(const std::vector<std::string>& data, std::unique_ptr<sql::Connection>& con) {
     try {
-        sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
-        std::unique_ptr<sql::Connection> con(driver->connect("tcp://localhost:3306", "root", ""));
-
-        con->setSchema("Dataset");
-
         std::unique_ptr<sql::Statement> stmt(con->createStatement());
         stmt->execute("CREATE TABLE IF NOT EXISTS feature (app VARCHAR(100), timeStamp DATETIME(6), srcIP VARCHAR(20), dstIP VARCHAR(20),srcPort INT, dstPort INT,\
 			clientTlsVersion VARCHAR(10) ,clientCipherSuits VARCHAR(10), clientExtensions VARCHAR(10), clientSupportedGroups VARCHAR(10), clientEcPointFormats VARCHAR(10),\
@@ -303,11 +276,8 @@ void insertFlowFeatureIntoMySQL(const std::vector<std::string>& data) {
     }
 }
 
-void insertProtocolInfoIntoMySQL(const ProtocolInfo& info) {
+void insertProtocolInfoIntoMySQL(const ProtocolInfo& info, std::unique_ptr<sql::Connection>& con) {
     try {
-        sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
-        std::unique_ptr<sql::Connection> con(driver->connect("tcp://localhost:3306", "root", ""));
-
         // Select the database schema
         con->setSchema("YourDatabaseName");
 
@@ -398,15 +368,11 @@ void insertProtocolInfoIntoMySQL(const ProtocolInfo& info) {
     }
 }
 
-
-/**
- * Handle an intercepted packet: identify if it's a ClientHello or ServerHello packets, extract the TLS fingerprint and write it to the output file
- */
-
+// 处理每一个包
 void handlePacket(RawPacket* rawPacket, const HandlePacketData* data)
 {
 	Packet* parsedPacket;
-	// throw the bad packets
+	// 丢掉坏包
 	try {
 		parsedPacket = new Packet(rawPacket);
 		// check if the packet is IP packet
@@ -415,8 +381,6 @@ void handlePacket(RawPacket* rawPacket, const HandlePacketData* data)
 			// generate flow key for the packet
 			FlowKey* flowKey = generateFlowKey(parsedPacket);
 
-			// TODO: fix mem bug
-			// find the flow by flowkey, then update flowkey-flow mapping
 			if (flowKey == NULL) return;
 			std::map<FlowKey, Flow*>::iterator flowIter = data->flows->find(*flowKey);
 			if (flowIter == data->flows->end())
@@ -430,8 +394,6 @@ void handlePacket(RawPacket* rawPacket, const HandlePacketData* data)
 
 				if(data->flows->empty()) timestamp_of_first_packet = flow->start_timestamp;
 				flow->latter_timestamp = flow->start_timestamp;
-				//flow->start_timestamp = rawPacket->getPacketTimeStamp().tv_nsec;//fixed the duration and bandwidth bugs
-				//flow->flowFeature.startts = rawPacket->getPacketTimeStamp().tv_nsec; 
 				data->flows->insert(std::pair<FlowKey, Flow*>(*flowKey, flow));
 			}
 			else
@@ -505,10 +467,10 @@ void calculateFlowFeature(const HandlePacketData* data)
 	if (data->flows->size() >= 1) {
 		// 处理每一条流
 		for (auto it = data->flows->begin(); it != data->flows->end(); ++it) {
-			bool download_flag = false; 
 			if(isDownloadSessions(it->second->flowKey, it->second->payload_size))
 				download_flag = true;
 			it->second->terminate(download_flag);
+			download_flag = false;
 			// build SeesionKey from FlowKey, add TLS fingerprint to flow feature
 			SessionKey sessionKey;
 	
@@ -525,8 +487,8 @@ void calculateFlowFeature(const HandlePacketData* data)
 	}
 }
 
-WholeFlowsFeature flowsFeature;
-void calculateWholeFlowFeature(const HandlePacketData* data){
+
+void calculateOtherFeature(const HandlePacketData* data){
 	flowsFeature.active_flow_count = countActiveFlowsEveryFiveSeconds(data);
 	flowsFeature.flow_of_same_port = countFlowsByPorts(data);
 	flowsFeature.flow_of_same_ip = countFlowsByIP(data);
@@ -544,6 +506,9 @@ void calculateWholeFlowFeature(const HandlePacketData* data){
 	packetsFeature.packet_rate = packet_cnt_of_pcap  / (timestamp_of_last_packet - timestamp_of_first_packet) * 1e9;
 	packetsFeature.packet_rate = bytes_cnt_of_pcap  / (timestamp_of_last_packet - timestamp_of_first_packet) * 1e9;
 
+	if(downloadMetrics.download_session_count)
+		downloadMetrics.segmented_download = true;
+	
 }
 
 void classficationFlows(const HandlePacketData* data, SVMPredictor* model)
@@ -598,13 +563,10 @@ void classficationFlows(const HandlePacketData* data, SVMPredictor* model)
  */
 void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::string& outputFileName, const std::string& bpfFilter, std::string& modelPath)
 {
-	// open input file (pcap or pcapng file)
 	IFileReaderDevice* reader = IFileReaderDevice::getReader(inputPcapFileName.c_str());
-	// try to open the file device
 	if (!reader->open())
 		EXIT_WITH_ERROR("Cannot open pcap/pcapng file");
 
-	// set output file name to input file name if not provided by the user
 	std::string outputPath = "./Output/test/";
 	std::string pengdingPath;
 	if (outputFileName.empty())
@@ -616,7 +578,6 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 	std::string fileNameWithoutExtension = pengdingPath.substr(fileNameOffset, extensionOffset - fileNameOffset);
 	outputFileName = outputPath + fileNameWithoutExtension + ".csv";
 
-	// open output file
 	std::ofstream outputFile(outputFileName.c_str());
 	if (!outputFile)
 	{
@@ -635,28 +596,29 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 
 	std::cout << "Start reading '" << inputPcapFileName << "'..." << std::endl;
 
-
 	std::map<SessionKey, TLSFingerprint*> stats;
 	std::map<FlowKey, Flow*> flows;
 	std::vector<HttpRequest> webrequest;
 	std::vector<HttpResponse> webresponse;
-	std::vector<SinglePacketInfo> packetInfoVector;
-	std::vector<PacketsFeature> packetsInfoVector;
+	std::vector<SinglePacketInfo> singlePacketInfoVector;
 	std::vector<ProtocolInfo> protocolInfoVector;
 
-	data.outputFile = &outputFile;
+	//data.outputFile = &outputFile;
 	data.stats = &stats;
 	data.flows = &flows;
 	data.WebRequest = &webrequest;
 	data.WebResponse = &webresponse;
-	data.singlePacketInfoVector = &packetInfoVector;
-	data.packetsInfoVector = &packetsInfoVector;
+	data.singlePacketInfoVector = &singlePacketInfoVector;
 	data.protocolInfoVector = &protocolInfoVector;
-	std::vector<std::string> toString;
-	RawPacket rawPacket;
 
-	// iterate over all packets in the file
+	data.packetsFeature = &packetsFeature;
+	data.videoMetrics = &videoMetrics;
+	data.downloadMetrics = &downloadMetrics;
+	data.flowsFeature = &flowsFeature;
+
+	// 读取pcap中的各个包
 	try {
+		RawPacket rawPacket;
 		while (reader->getNextPacket(rawPacket)){
 			handlePacket(&rawPacket, &data);
 		}
@@ -665,16 +627,27 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 		std::cerr << "Flow capture has been shut due to capture problems." << '\n';
 	}
 
-	// close the reader and free its memory
 	reader->close();
 	delete reader;
 
-    //write feature data to database
 	std::cout << "here" << std::endl;
 	calculateFlowFeature(&data);
-	calculateWholeFlowFeature(&data);
+	calculateOtherFeature(&data);
 	writeToOutputData(&data, toString, fileNameWithoutExtension);
-	//insertFlowFeatureIntoMySQL(toString);
+
+	// 向数据库中写入数据
+	try {
+		sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
+		std::unique_ptr<sql::Connection> con(driver->connect("tcp://localhost:3306", "root", ""));
+		con->setSchema("Dataset");
+		insertFlowFeatureIntoMySQL(toString, con); // 这里假设toString是有效的参数
+		for(auto &info : protocolInfoVector){
+			insertProtocolInfoIntoMySQL(info, con);
+		}
+	}catch(std::exception &e){
+		std::cerr << e.what() << std::endl;
+	}
+
 	std::cout << "Having written " << toString.size() / 4 << " rows into the table\n\n";
 
 	SVMPredictor predictor(modelPath, 1.0/24.0);
@@ -739,7 +712,7 @@ void doTlsFingerprintingOnLiveTraffic(const std::string& interfaceNameOrIP, std:
 	}
 
 	// write the column headers to the output file
-	writeFlowFeatureHeaderToOutputFile(outputFile);
+	//writeFlowFeatureHeaderToOutputFile(outputFile);
 
 	// set BPF filter if provided by the user
 	if (!bpfFilter.empty())
@@ -752,7 +725,7 @@ void doTlsFingerprintingOnLiveTraffic(const std::string& interfaceNameOrIP, std:
 
 	std::map<SessionKey, TLSFingerprint*> stats;
 	HandlePacketData data;
-	data.outputFile = &outputFile;
+	//data.outputFile = &outputFile;
 	data.stats = &stats;
 
 	// start capturing packets. Each packet arrived will be handled by the onPacketArrives method
