@@ -124,8 +124,3 @@ bool isResumedDownload(const std::vector<pcpp::Packet>& packets);
 double calculateEntropy(const std::map<uint8_t, int>& frequencyMap);
 #endif //FLOW_H
 
-
-
-
-
-

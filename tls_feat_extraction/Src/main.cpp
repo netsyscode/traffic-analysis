@@ -25,11 +25,15 @@ std::vector<double> calculatePercentiles(const std::vector<double>& a);
 std::vector<double> getFlowsValues(const HandlePacketData* data, const char fieldName[]);
 std::pair<std::map<u_int16_t, int>, std::map<u_int16_t, int>> countFlowsByPorts(const HandlePacketData* data);
 std::pair<std::map<std::string, int>, std::map<std::string, int>> countFlowsByIP(const HandlePacketData* data);
-std::vector<int> countActiveFlowsEveryFiveSeconds(const HandlePacketData* data);
+int countActiveFlowsEveryFiveSeconds(const HandlePacketData* data);
 bool isDownloadSessions(const FlowKey key, const LL &payload_size); 
 void insertFlowFeatureIntoMySQL(const std::vector<std::string>& data, std::unique_ptr<sql::Connection>& con);
 void insertProtocolInfoIntoMySQL(const std::vector<ProtocolInfo>& data, std::unique_ptr<sql::Connection>& con);
 void insertSinglePacketInfoIntoMySQL(const std::vector<SinglePacketInfo>& data, std::unique_ptr<sql::Connection>& con);
+void insertPacketsFeatureIntoMySQL(const PacketsFeature& features, std::unique_ptr<sql::Connection>& con);
+void insertWholeFlowsFeatureIntoMySQL(const WholeFlowsFeature& flowsFeature, std::unique_ptr<sql::Connection>& con);
+std::map<std::string, std::string> readConfig(const std::string& configFile); 
+
 WholeFlowsFeature flowsFeature;
 static struct option TLSFingerprintingOptions[] =
 {
@@ -226,8 +230,6 @@ void writeToOutputData(const HandlePacketData* data, std::vector<std::string> &t
 	}
 }
 
-
-
 // 处理每一个包
 void handlePacket(RawPacket* rawPacket, const HandlePacketData* data)
 {
@@ -348,19 +350,18 @@ void calculateFlowFeature(const HandlePacketData* data)
 }
 
 void calculateOtherFeature(const HandlePacketData* data){
-	flowsFeature.active_flow_count = countActiveFlowsEveryFiveSeconds(data);
+	flowsFeature.max_active_flow_count = countActiveFlowsEveryFiveSeconds(data);
 	flowsFeature.flow_of_same_port = countFlowsByPorts(data);
 	flowsFeature.flow_of_same_ip = countFlowsByIP(data);
 
-	flowsFeature.duration_distribution = calculatePercentiles(getFlowsValues(data, "dur"));
+	flowsFeature.flow_duration_distribution = calculatePercentiles(getFlowsValues(data, "dur"));
 	flowsFeature.packet_count_distribution = calculatePercentiles(getFlowsValues(data, "pktcnt"));
 	flowsFeature.byte_size_distribution = calculatePercentiles(getFlowsValues(data, "bytes_of_flow"));
 	flowsFeature.average_packet_size_distribution = calculatePercentiles(getFlowsValues(data, "avg_bytes_of_flow"));
-	flowsFeature.ttl_distribution = calculatePercentiles(getFlowsValues(data, "avg_ttl"));
+	flowsFeature.avg_ttl_distribution = calculatePercentiles(getFlowsValues(data, "avg_ttl"));
 	flowsFeature.window_size_distribution = calculatePercentiles(getFlowsValues(data, "avg_window_size"));
 	flowsFeature.end_to_end_lanteny_distribution = calculatePercentiles(getFlowsValues(data, "end_to_end_latency"));
 	flowsFeature.payload_entropy_distribution = calculatePercentiles(getFlowsValues(data, "entropy_of_payload"));
-	flowsFeature.flow_peak_traffic_distribution = calculatePercentiles(getFlowsValues(data, "flow_peak_traffic"));
 
 	packetsFeature.packet_rate = packet_cnt_of_pcap  / (timestamp_of_last_packet - timestamp_of_first_packet) * 1e9;
 	packetsFeature.packet_rate = bytes_cnt_of_pcap  / (timestamp_of_last_packet - timestamp_of_first_packet) * 1e9;
@@ -491,7 +492,6 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 	reader->close();
 	delete reader;
 
-	std::cout << "here" << std::endl;
 	calculateFlowFeature(&data);
 	calculateOtherFeature(&data);
 	writeToOutputData(&data, toString, fileNameWithoutExtension);
@@ -499,22 +499,24 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 	// 向数据库中写入数据
 	try {
 		sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
-		std::unique_ptr<sql::Connection> con(driver->connect("tcp://localhost:3306", "root", ""));
-		con->setSchema("Dataset");
+
+		//连接至数据库
+		auto config = readConfig("dbconfig.ini");
+		std::unique_ptr<sql::Connection> con(driver->connect(config["host"], config["user"], config["password"]));
+		con->setSchema("TrafficData");
 		insertFlowFeatureIntoMySQL(toString, con); // 这里假设toString是有效的参数
 		insertProtocolInfoIntoMySQL(protocolInfoVector, con);
 		insertSinglePacketInfoIntoMySQL(singlePacketInfoVector, con);
-
+		insertPacketsFeatureIntoMySQL(packetsFeature, con);
+		insertWholeFlowsFeatureIntoMySQL(flowsFeature, con);
 	}catch(std::exception &e){
 		std::cerr << e.what() << std::endl;
 	}
 
-	std::cout << "Having written " << toString.size() / 4 << " rows into the table\n\n";
-
-	SVMPredictor predictor(modelPath, 1.0/24.0);
- 	std::cout << "--------------------------------------------------------" << std::endl;
- 	std::cout << "Successfully load model from '" << modelPath << "'" << std::endl;
- 	std::cout << "--------------------------------------------------------" << std::endl;
+	// SVMPredictor predictor(modelPath, 1.0/24.0);
+ 	// std::cout << "--------------------------------------------------------" << std::endl;
+ 	// std::cout << "Successfully load model from '" << modelPath << "'" << std::endl;
+ 	// std::cout << "--------------------------------------------------------" << std::endl;
 	
 	//classficationFlows(&data, &predictor);
 	//std::cout << "Output file was written to: '" << outputFileName << "'" << std::endl;
@@ -665,7 +667,7 @@ int main(int argc, char* argv[])
 	}
 }
 
-std::vector<int> countActiveFlowsEveryFiveSeconds(const HandlePacketData* data) {
+int countActiveFlowsEveryFiveSeconds(const HandlePacketData* data) {
     if (data == nullptr || data->flows == nullptr) return {};
 
     // 找出所有流中最早和最晚的时间戳
@@ -681,20 +683,21 @@ std::vector<int> countActiveFlowsEveryFiveSeconds(const HandlePacketData* data) 
     auto intervals = (duration / 5) + 1;
 
     // 初始化结果向量
-    std::vector<int> activeFlows(intervals, 0);
+    int res = 0;
 
     // 遍历每个流
     for (const auto& pair : *data->flows) {
+		int active_flow_count = 0;
         const Flow* flow = pair.second;
         int startInterval = (flow->start_timestamp - minStart) /1e9 / 5;
         int endInterval = (flow->latest_timestamp - minStart) / 1e9 / 5;
-        
         // 在流活跃的每个时间窗口内增加计数
         for (int i = startInterval; i <= endInterval; ++i) {
-            activeFlows[i]++;
+            active_flow_count++;
         }
+		res = std::max(res, active_flow_count);
     }
-    return activeFlows;
+    return res;
 }
 
 // 统计下载会话
