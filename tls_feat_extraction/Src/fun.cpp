@@ -3,18 +3,31 @@
 #include <regex>
 #include "global.h"
 
+
 // 一条流的特征
 void Flow::terminate(bool download_flag)
 {
+    // 包间特征
+    PacketsFeature packetsFeature;
+    packetsFeature.max_packet_size = max_packet_size;
+    packetsFeature.min_packet_size = min_packet_size;
+    packetsFeature.max_interval_between_packets = max_interval_between_packets;
+    packetsFeature.min_interval_between_packets = min_interval_between_packets;
 	// 包长的中位数、标准差、偏度和峰度
 	packetsFeature.median_packet_size = calculateMedian(packets_size);
 	packetsFeature.std_packet_size = calculateStandardVariance(packets_size);
 	packetsFeature.packet_size_skewness = calculateSkewness(packets_size);
 	packetsFeature.packet_size_kurtosis = calculateKurtosis(packets_size);
 
+	packetsFeature.packet_rate = packet_cnt_of_pcap  / (timestamp_of_last_packet - timestamp_of_first_packet) * 1e9;
+	packetsFeature.packet_rate = bytes_cnt_of_pcap  / (timestamp_of_last_packet - timestamp_of_first_packet) * 1e9;
+	packetsFeature.psh_between_time = calculateAverage(psh_interval_vec);
+	packetsFeature.urg_between_time = calculateAverage(urg_interval_vec);
+    
 	// 包间时延的中位数和标准差
 	packetsFeature.median_packet_interval = calculateMedian(interval_vec);
 	packetsFeature.std_packet_interval = calculateStandardVariance(interval_vec);
+    data.packetsFeatureVector->push_back(packetsFeature);
 
 	double duration = (double(latest_timestamp) - start_timestamp) / 1e9;//秒为单位
 	flowFeature.dur = duration;
@@ -372,7 +385,7 @@ std::pair<std::map<u_int16_t, int>, std::map<u_int16_t, int>> countFlowsByPorts(
     return {srcPortCounts, dstPortCounts};
 }
 
-// 统计一条流的源IP和目的IP数
+// 统计流的源IP和目的IP数
 std::pair<std::map<std::string, int>, std::map<std::string, int>> countFlowsByIP(const HandlePacketData* data) {
     std::map<std::string, int> srcIPCounts, dstIPCounts;
     for (const auto& pair : *data->flows) {
@@ -419,7 +432,10 @@ bool isPrivateIP(const std::string& ipAddress) {
 
 // 计算平均值
 double calculateAverage(std::vector<double>& vec) {
-    return std::accumulate(vec.begin(), vec.end(), 0.0) / vec.size();
+    if(!vec.empty())
+        return std::accumulate(vec.begin(), vec.end(), 0.0) / vec.size();
+    else
+        return 0;
 }
 
 // 计算中位数
@@ -447,7 +463,7 @@ double calculateStandardVariance(std::vector<double>& vec) {
 double calculateSkewness(const std::vector<double>& packets_size) {
     if (packets_size.size() < 3) {
         // 数据量太少，无法计算偏度
-        return std::nan("");
+        return 0.0;
     }
     double mean = std::accumulate(packets_size.begin(), packets_size.end(), 0.0) / packets_size.size();
     
@@ -469,8 +485,8 @@ double calculateSkewness(const std::vector<double>& packets_size) {
 double calculateKurtosis(const std::vector<double>& packets_size) {
     size_t n = packets_size.size();
     if (n < 4) {
-        // 数据量太少，无法计算峰度
-        return std::nan("");
+        // 数据量太少，无法计算峰度urg_between_time
+        return 0.0;
     }
     double mean = std::accumulate(packets_size.begin(), packets_size.end(), 0.0) / n;
     double variance = 0.0;
@@ -546,4 +562,25 @@ bool checkForRangeHeader(const pcpp::Packet& packet) {
         }
     }
     return false;
+}
+
+// 从ini配置文件中读取数据库配置
+std::map<std::string, std::string> readConfig(const std::string& configFile) {
+    std::map<std::string, std::string> config;
+    std::ifstream file(configFile);
+    std::string line;
+
+    while (std::getline(file, line)) {
+        std::istringstream is_line(line);
+        std::string key;
+        if (std::getline(is_line, key, '=')) {
+            std::string value;
+            if (key[0] == '[') { // skip sections
+                continue;
+            } else if (std::getline(is_line, value)) {
+                config[key] = value;
+            }
+        }
+    }
+    return config;
 }

@@ -10,12 +10,17 @@ std::vector<double> urg_interval_vec;
 uint64_t packet_cnt_of_pcap;
 uint64_t bytes_cnt_of_pcap;
 bool download_flag = false;
-PacketsFeature packetsFeature;
+
+
 DownloadMetrics downloadMetrics;
 VideoStreamMetrics videoMetrics;
 
 uint32_t sps_parser_offset;
 uint8_t sps_parser_base64_table[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+int countActiveFlowsEveryFiveSeconds(const HandlePacketData* data);
+
+
 // Base64解码函数
 size_t sps_parser_base64_decode(char *buffer) {
 	uint8_t dtable[256], block[4], tmp, pad = 0;
@@ -225,7 +230,6 @@ double calculateEntropy(const std::map<uint8_t, int>& frequencyMap) {
 //更新相关特征
 void Flow::updateFeature(RawPacket* pkt) {
 	int pktLen = pkt->getFrameLength();
-
 	SinglePacketInfo singlePacketInfo;
 	singlePacketInfo.packet_length = pktLen;
 	packets_size.push_back(pktLen);
@@ -246,8 +250,8 @@ void Flow::updateFeature(RawPacket* pkt) {
 	}
 	//累加包长
 	packets_size_sum += pktLen;//单位
-	packetsFeature.max_packet_size = std::max(packetsFeature.max_packet_size, pktLen);
-	packetsFeature.min_packet_size = std::min(packetsFeature.min_packet_size, pktLen);
+	max_packet_size = std::max(max_packet_size, pktLen);
+	min_packet_size = std::min(min_packet_size, pktLen);
 
 	//更新最新包的时间戳(以ns为单位)
 	long sec = pkt->getPacketTimeStamp().tv_sec;
@@ -259,10 +263,10 @@ void Flow::updateFeature(RawPacket* pkt) {
 
 	// 计算相邻两个包间时延
 	if(latest_timestamp != latter_timestamp){
-		auto diff = (latest_timestamp - latter_timestamp) / 1e9;
+		diff = (latest_timestamp - latter_timestamp) / 1e9;
 		interval_vec.push_back(diff);
-		packetsFeature.max_interval_between_packets = std::max(packetsFeature.max_interval_between_packets, diff);
-		packetsFeature.min_interval_between_packets = std::min(packetsFeature.min_interval_between_packets, diff);
+		max_interval_between_packets = std::max(max_interval_between_packets, diff);
+		min_interval_between_packets = std::min(min_interval_between_packets, diff);
 	}
 
 	ProtocolInfo protocolInfo;
@@ -615,5 +619,6 @@ void Flow::updateFeature(RawPacket* pkt) {
 		data.protocolInfoVector->push_back(protocolInfo);
 		data.singlePacketInfoVector->push_back(singlePacketInfo);
 }
+
 
 

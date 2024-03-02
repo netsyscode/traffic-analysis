@@ -54,7 +54,6 @@ struct FlowKey
 	bool operator== (const struct FlowKey& e) const;
 };
 
-extern PacketsFeature packetsFeature;// 包间特征
 extern VideoStreamMetrics videoMetrics;
 extern bool download_flag;
 extern DownloadMetrics downloadMetrics;
@@ -92,7 +91,7 @@ public:
 	std::vector<double> rtts;
 	RawPacket* pkt;
 	int ret = 0;
-	std::vector<double> packets_size;
+	std::vector<double> packets_size; // 每条流一个
 	std::vector<double> interval_vec;
 	std::vector<double> syn_ack_vec;
 	std::vector<double> fin_ack_vec;
@@ -100,6 +99,9 @@ public:
 	bool first_urg = false;
 	LL last_psh = 0;
 	LL last_urg = 0;
+	double diff = 0.0;
+	int max_packet_size = 0, min_packet_size = 0;
+	double max_interval_between_packets = 0.0, min_interval_between_packets = 0.0;
 };
 
 extern std::vector<double> psh_interval_vec;

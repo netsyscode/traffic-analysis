@@ -9,7 +9,7 @@
 #include "feature.h"
 
 // 将流特征写入数据库（注意列之间的顺序）
-void insertFlowFeatureIntoMySQL(const std::vector<std::string>& data, std::unique_ptr<sql::Connection>& con) {
+void insertSingleFlowFeatureIntoMySQL(const std::vector<std::string>& data, std::unique_ptr<sql::Connection>& con) {
     try {
         std::unique_ptr<sql::Statement> stmt(con->createStatement());
 
@@ -57,8 +57,9 @@ void insertFlowFeatureIntoMySQL(const std::vector<std::string>& data, std::uniqu
 
             pstmt->executeUpdate();
         }
+        std::cout << "Insert SingleFlowFeature Into MySQL Successfully!\n";
     } catch (sql::SQLException& e) {
-        std::cerr << "SQLException in insertFlowFeatureIntoMySQL():" << std::endl
+        std::cerr << "SQLException in insertSingleFlowFeatureIntoMySQL():" << std::endl
                   << "SQLState: " << e.getSQLState() << std::endl
                   << "Error Code: " << e.getErrorCode() << std::endl
                   << "Message: " << e.what() << std::endl;
@@ -71,31 +72,31 @@ void insertProtocolInfoIntoMySQL(const std::vector<ProtocolInfo>& data, std::uni
         stmt->execute("CREATE TABLE IF NOT EXISTS ProtocolInfo ("
                       "mac_source VARCHAR(17), "
                       "mac_destination VARCHAR(17), "
-                      "ethernet_type SMALLINT, "
+                      "ethernet_type SMALLINT UNSIGNED, "
                       "vlan_id INT, "
-                      "mpls_label INT, "
-                      "pppoe_session_id SMALLINT, "
+                      "mpls_label INT UNSIGNED, "
+                      "pppoe_session_id SMALLINT UNSIGNED, "
                       "protocol_type VARCHAR(10), "
                       "ip_version VARCHAR(4), "
-                      "ip_tos TINYINT, "
-                      "ip_header_checksum SMALLINT, "
-                      "ip_fragmentation_flag TINYINT, "
-                      "ip_identifier SMALLINT, "
+                      "ip_tos TINYINT UNSIGNED, "
+                      "ip_header_checksum SMALLINT UNSIGNED, "
+                      "ip_fragmentation_flag TINYINT UNSIGNED, "
+                      "ip_identifier SMALLINT UNSIGNED, "
                       // Skip ipv6_flow_label as it needs special handling
-                      "ipv6_next_header TINYINT, "
+                      "ipv6_next_header TINYINT UNSIGNED, "
                       "wireless_network_ssid VARCHAR(32), "
-                      "tcp_header_length SMALLINT, "
+                      "tcp_header_length SMALLINT UNSIGNED, "
                       "tcp_window_size SMALLINT UNSIGNED, "
                       "syn_flag BOOLEAN, "
                       "fin_flag BOOLEAN, "
                       "rst_flag BOOLEAN, "
                       "psh_flag BOOLEAN, "
                       "urg_flag BOOLEAN, "
-                      "tcp_sequence_number INT, "
-                      "tcp_acknowledgement_number INT, "
-                      "udp_header_length SMALLINT, "
-                      "udp_checksum SMALLINT, "
-                      "icmp_type TINYINT, "
+                      "tcp_sequence_number INT UNSIGNED, "
+                      "tcp_acknowledgement_number INT UNSIGNED, "
+                      "udp_header_length SMALLINT UNSIGNED, "
+                      "udp_checksum SMALLINT UNSIGNED, "
+                      "icmp_type SMALLINT UNSIGNED, "
                       "icmp_code INT, "
                       "arp_request BOOLEAN, "
                       "arp_reply BOOLEAN "
@@ -117,36 +118,36 @@ void insertProtocolInfoIntoMySQL(const std::vector<ProtocolInfo>& data, std::uni
 			pstmt->setString(i++, info.mac_destination);
 			pstmt->setUInt(i++, info.ethernet_type);
 			pstmt->setInt(i++, info.vlan_id);
-			pstmt->setInt(i++, info.mpls_label);
+			pstmt->setUInt(i++, info.mpls_label);
 			pstmt->setUInt(i++, info.pppoe_session_id);
 			pstmt->setString(i++, info.protocol_type);
 			pstmt->setString(i++, info.ip_version);
-			pstmt->setInt(i++, info.ip_tos);
+			pstmt->setUInt(i++, info.ip_tos);
 			pstmt->setUInt(i++, info.ip_header_checksum);
 			pstmt->setUInt(i++, info.ip_fragmentation_flag);
-			pstmt->setInt(i++, info.ip_identifier);
+			pstmt->setUInt(i++, info.ip_identifier);
 			// Skipping ipv6_flow_label
-			pstmt->setInt(i++, info.ipv6_next_header);
+			pstmt->setUInt(i++, info.ipv6_next_header);
 			pstmt->setString(i++, info.wireless_network_ssid);
-			pstmt->setInt(i++, info.tcp_header_length);
+			pstmt->setUInt(i++, info.tcp_header_length);
 			pstmt->setUInt(i++, info.tcp_window_size);
 			pstmt->setBoolean(i++, info.syn_flag);
 			pstmt->setBoolean(i++, info.fin_flag);
 			pstmt->setBoolean(i++, info.rst_flag);
 			pstmt->setBoolean(i++, info.psh_flag);
 			pstmt->setBoolean(i++, info.urg_flag);
-			pstmt->setInt(i++, info.tcp_sequence_number);
-			pstmt->setInt(i++, info.tcp_acknowledgement_number);
-			pstmt->setInt(i++, info.udp_header_length);
-			pstmt->setInt(i++, info.udp_checksum);
-			pstmt->setInt(i++, info.icmp_type);
+			pstmt->setUInt(i++, info.tcp_sequence_number);
+			pstmt->setUInt(i++, info.tcp_acknowledgement_number);
+			pstmt->setUInt(i++, info.udp_header_length);
+			pstmt->setUInt(i++, info.udp_checksum);
+			pstmt->setUInt(i++, info.icmp_type);
 			pstmt->setInt(i++, info.icmp_code);
 			pstmt->setBoolean(i++, info.arp_request);
 			pstmt->setBoolean(i++, info.arp_reply);
 			// Execute the prepared statement
 			pstmt->executeUpdate();
 		}
-
+        std::cout << "Insert ProtocolFeature Into MySQL Successfully!\n";
     } catch (sql::SQLException& e) {
         std::cerr << "SQLException in insertProtocolInfoIntoMySQL():" << std::endl
                   << "SQLState: " << e.getSQLState() << std::endl
@@ -180,6 +181,7 @@ void insertSinglePacketInfoIntoMySQL(const std::vector<SinglePacketInfo>& data, 
             
             pstmt->executeUpdate();
         }
+        std::cout << "Insert SinglePacketFeature Into MySQL Successfully!\n";
     } catch (sql::SQLException& e) {
         std::cerr << "SQLException in insertSinglePacketInfoIntoMySQL():" << std::endl
                   << "SQLState: " << e.getSQLState() << std::endl
@@ -188,7 +190,7 @@ void insertSinglePacketInfoIntoMySQL(const std::vector<SinglePacketInfo>& data, 
     }
 }
 
-void insertPacketsFeatureIntoMySQL(const PacketsFeature& feature, std::unique_ptr<sql::Connection>& con) {
+void insertPacketsFeatureIntoMySQL(const std::vector<PacketsFeature>& features, std::unique_ptr<sql::Connection>& con) {
     try {
 
 
@@ -221,27 +223,30 @@ void insertPacketsFeatureIntoMySQL(const PacketsFeature& feature, std::unique_pt
                                           "packet_size_kurtosis, packet_size_skewness, packet_rate, byte_rate, "
                                           "syn_ack_time, fin_ack_time, psh_between_time, urg_between_time) "
                                           "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
-        int i = 1;
-        pstmt->setDouble(i++, feature.avg_packet_size);
-        pstmt->setUInt(i++, feature.median_packet_size);
-        pstmt->setInt(i++, feature.max_packet_size);
-        pstmt->setInt(i++, feature.min_packet_size);
-        pstmt->setDouble(i++, feature.std_packet_size);
-        pstmt->setDouble(i++, feature.avg_packet_interval);
-        pstmt->setDouble(i++, feature.median_packet_interval);
-        pstmt->setDouble(i++, feature.max_interval_between_packets);
-        pstmt->setDouble(i++, feature.min_interval_between_packets);
-        pstmt->setDouble(i++, feature.std_packet_interval);
-        pstmt->setDouble(i++, feature.packet_size_kurtosis);
-        pstmt->setDouble(i++, feature.packet_size_skewness);
-        pstmt->setDouble(i++, feature.packet_rate);
-        pstmt->setDouble(i++, feature.byte_rate);
-        pstmt->setDouble(i++, feature.syn_ack_time);
-        pstmt->setDouble(i++, feature.fin_ack_time);
-        pstmt->setDouble(i++, feature.psh_between_time);
-        pstmt->setDouble(i++, feature.urg_between_time);
+        for(auto feature: features){                                 
+            int i = 1;
+            pstmt->setDouble(i++, feature.avg_packet_size);
+            pstmt->setUInt(i++, feature.median_packet_size);
+            pstmt->setInt(i++, feature.max_packet_size);
+            pstmt->setInt(i++, feature.min_packet_size);
+            pstmt->setDouble(i++, feature.std_packet_size);
+            pstmt->setDouble(i++, feature.avg_packet_interval);
+            pstmt->setDouble(i++, feature.median_packet_interval);
+            pstmt->setDouble(i++, feature.max_interval_between_packets);
+            pstmt->setDouble(i++, feature.min_interval_between_packets);
+            pstmt->setDouble(i++, feature.std_packet_interval);
+            pstmt->setDouble(i++, feature.packet_size_kurtosis);
+            pstmt->setDouble(i++, feature.packet_size_skewness);
+            pstmt->setDouble(i++, feature.packet_rate);
+            pstmt->setDouble(i++, feature.byte_rate);
+            pstmt->setDouble(i++, feature.syn_ack_time);
+            pstmt->setDouble(i++, feature.fin_ack_time);
+            pstmt->setDouble(i++, feature.psh_between_time);
+            pstmt->setDouble(i++, feature.urg_between_time);
+            pstmt->executeUpdate();
+        }
 
-        pstmt->executeUpdate();
+        std::cout << "Insert PacketsFeature Into MySQL Successfully!\n";
     } catch (sql::SQLException& e) {
         std::cerr << "SQLException in insertPacketsFeatureIntoMySQL():" << std::endl
                   << "SQLState: " << e.getSQLState() << std::endl
@@ -250,12 +255,10 @@ void insertPacketsFeatureIntoMySQL(const PacketsFeature& feature, std::unique_pt
     }
 }
 
-void insertWholeFlowsFeatureIntoMySQL(const WholeFlowsFeature& flowsFeature, std::unique_ptr<sql::Connection>& con) {
-    try {
-        
+void insertFlowsFeatureIntoMySQL(const FlowsFeature& flowsFeature, std::unique_ptr<sql::Connection>& con) {
+    try { 
         std::unique_ptr<sql::Statement> stmt(con->createStatement());
-        stmt->execute("CREATE TABLE IF NOT EXISTS FlowFeatures ("
-            "id INT AUTO_INCREMENT PRIMARY KEY,"
+        stmt->execute("CREATE TABLE IF NOT EXISTS FlowsFeature ("
             "max_active_flow_count INT,"
             "flow_duration_10 DOUBLE,"
             "flow_duration_25 DOUBLE,"
@@ -300,7 +303,7 @@ void insertWholeFlowsFeatureIntoMySQL(const WholeFlowsFeature& flowsFeature, std
          ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
         std::unique_ptr<sql::PreparedStatement> pstmt;
-        pstmt.reset(con->prepareStatement("INSERT INTO FlowFeatures (max_active_flow_count, \
+        pstmt.reset(con->prepareStatement("INSERT INTO FlowsFeature (max_active_flow_count, \
         flow_duration_10, flow_duration_25, flow_duration_50, flow_duration_75, flow_duration_90, \
         packet_count_10, packet_count_25, packet_count_50, packet_count_75, packet_count_90, byte_size_10, \
         byte_size_25, byte_size_50, byte_size_75, byte_size_90, average_packet_size_10, average_packet_size_25, \
@@ -320,8 +323,9 @@ void insertWholeFlowsFeatureIntoMySQL(const WholeFlowsFeature& flowsFeature, std
             }
         }
         pstmt->executeUpdate();
+        std::cout << "Insert FlowsFeature Into MySQL Successfully!\n";
     } catch (sql::SQLException& e) {
-        std::cerr << "SQLException in insertWholeFlowsFeatureIntoMySQL():" << std::endl
+        std::cerr << "SQLException in insertFlowsFeatureIntoMySQL():" << std::endl
                   << "SQLState: " << e.getSQLState() << std::endl
                   << "Error Code: " << e.getErrorCode() << std::endl
                   << "Message: " << e.what() << std::endl;

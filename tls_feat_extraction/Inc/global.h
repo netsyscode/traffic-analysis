@@ -9,10 +9,10 @@ struct HandlePacketData {
     std::vector<HttpResponse>* WebResponse;
     std::vector<SinglePacketInfo>* singlePacketInfoVector;
     std::vector<ProtocolInfo>* protocolInfoVector;
-
-    WholeFlowsFeature* flowsFeature; // 流间特征
-    PacketsFeature* packetsFeature;  // 包间特征
+    std::vector<PacketsFeature>* packetsFeatureVector;
+    FlowsFeature* flowsFeature; // 流间特征
     VideoStreamMetrics* videoMetrics;// 视频类
     DownloadMetrics* downloadMetrics;// 下载类
 };
+
 extern HandlePacketData data;

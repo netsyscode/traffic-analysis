@@ -10,75 +10,46 @@ struct FlowFeature
 {
 	TLSFingerprint* tlsFingerprint = nullptr;
 	IPAddress srcIP, dstIP;
-	uint16_t srcPort, dstPort;
-	double startts, endts;			// 开始时间，结束时间
-	LL pktcnt;				// 包数
-	double pktlen, applen;			// 包长，应用层长度
-	double itvl, bw, appbw, thp, dur;	// 包间隔，带宽，应用层带宽，吞吐率
+	uint16_t srcPort = 0, dstPort = 0;
+	double startts = 0.0, endts = 0.0;			// 开始时间，结束时间
+	LL pktcnt = 0;				// 包数
+	double pktlen = 0.0, applen = 0.0;			// 包长，应用层长度
+	double itvl = 0.0, bw = 0.0, appbw = 0.0, thp = 0.0, dur = 0.0;	// 包间隔，带宽，应用层带宽，吞吐率
 	// 只比较吞吐量
 	bool operator<(const struct FlowFeature &other)const {
 		return thp < other.thp;
 	}
-	float score;
-	// 腾讯分类用的，这里其实用不太上
-	double ave_pkt_size_over_1000;//包长大于1000的包 的平均包长
-	double ave_pkt_size_under_300;//包长小于300的包 的平均包长
-	double cnt_len_over_1000;
-	double payload_size, payload_bandwidth; //payload长度，带宽
-	double udp_nopayload_rate;//没有payload的udp包比例
-	double ret_rate; //重传比例
-	double ave_rtt, rtt_min, rtt_max, rtt_range; //rtt均值，极值, 极差
+
+	double ave_pkt_size_over_1000 = 0.0;//包长大于1000的包 的平均包长
+	double ave_pkt_size_under_300 = 0.0;//包长小于300的包 的平均包长
+	double cnt_len_over_1000 = 0.0;
+	double payload_size = 0.0, payload_bandwidth = 0.0; //payload长度，带宽
+	double udp_nopayload_rate = 0.0;//没有payload的udp包比例
+	double ret_rate = 0.0; //重传比例
+	double ave_rtt = 0.0, rtt_min = 0.0, rtt_max = 0.0, rtt_range = 0.0; //rtt均值，极值, 极差
  
-	//新增协议
-	//流特征
-	LL bytes_of_flow, bytes_of_payload, header_of_packets, bytes_of_ret_packets;
-	int count_of_TCPpackets, count_of_UDPpackets, count_of_ICMPpackets;
-	int max_size_of_packet, min_size_of_packet;
-	double end_to_end_latency, avg_window_size, avg_ttl, avg_payload_size;
-	int count_of_ret_packets, count_of_syn_packets, count_of_fin_packets, count_of_rst_packets, count_of_ack_packets, count_of_psh_packets, count_of_urg_packets;
-	double entropy_of_payload;
-	int count_of_forward_packets, count_of_backward_packets;
-
-	FlowFeature() : 
-        tlsFingerprint(nullptr),
-        srcPort(0), dstPort(0),
-        startts(0.0), endts(0.0),
-        pktcnt(0),
-        pktlen(0.0), applen(0.0),
-        itvl(0.0), bw(0.0), appbw(0.0), thp(0.0),dur(0.0),
-        score(0.0),
-        ave_pkt_size_over_1000(0.0),
-        ave_pkt_size_under_300(0.0),
-        cnt_len_over_1000(0.0),
-        payload_size(0.0), payload_bandwidth(0.0),
-        udp_nopayload_rate(0.0),
-        ret_rate(0.0),
-        ave_rtt(0), rtt_min(0), rtt_max(0), rtt_range(0),
-
-		bytes_of_flow(0), bytes_of_payload(0), header_of_packets(0), bytes_of_ret_packets(0),
-		count_of_TCPpackets(0), count_of_UDPpackets(0), count_of_ICMPpackets(0),
-		end_to_end_latency(0.0), avg_window_size(0.0), avg_ttl(0.0), avg_payload_size(0.0),
-		count_of_ret_packets(0), count_of_syn_packets(0), count_of_fin_packets(0), count_of_rst_packets(0), count_of_ack_packets(0), count_of_psh_packets(0), count_of_urg_packets(0),
-		entropy_of_payload(0.0),
-		count_of_forward_packets(0), count_of_backward_packets(0)
-		// videoMetrics{0.0, "Unknown", 0.0, "Unknown", "Unknown", "Unknown", false, false, 0.0, false, false}
-		//downloadMetrics{0.0, 0.0, 0.0, 0.0, 0.0, 0, 0, 0.0, 0, 0, 0.0}
-    {}
+	LL bytes_of_flow = 0, bytes_of_payload = 0, header_of_packets = 0, bytes_of_ret_packets = 0;
+	int count_of_TCPpackets = 0, count_of_UDPpackets = 0, count_of_ICMPpackets = 0;
+	int max_size_of_packet = 0, min_size_of_packet = 0;
+	double end_to_end_latency = 0.0, avg_window_size, avg_ttl = 0.0, avg_payload_size = 0.0;
+	int count_of_ret_packets = 0, count_of_syn_packets = 0, count_of_fin_packets = 0, count_of_rst_packets = 0, count_of_ack_packets = 0, count_of_psh_packets = 0, count_of_urg_packets = 0;
+	double entropy_of_payload = 0.0;
+	int count_of_forward_packets = 0, count_of_backward_packets = 0;
 };
 
-struct WholeFlowsFeature {
-    std::vector<int> active_flow_count;
-    std::vector<double> duration_distribution;
+// 流间特征
+struct FlowsFeature {
+	std::pair<std::map<std::string, int>, std::map<std::string, int>> flow_of_same_ip;
+	std::pair<std::map<u_int16_t, int>, std::map<u_int16_t, int>> flow_of_same_port;
+    int max_active_flow_count;
+    std::vector<double> flow_duration_distribution;
     std::vector<double> packet_count_distribution;
     std::vector<double> byte_size_distribution;
-	std::pair<std::map<std::string, int>, std::map<std::string, int>> flow_of_same_ip;
     std::vector<double> average_packet_size_distribution;
-    std::vector<double> ttl_distribution;
+    std::vector<double> avg_ttl_distribution;
     std::vector<double> window_size_distribution;
-    std::pair<std::map<u_int16_t, int>, std::map<u_int16_t, int>> flow_of_same_port;
 	std::vector<double> end_to_end_lanteny_distribution;
     std::vector<double> payload_entropy_distribution;
-    std::vector<double> flow_peak_traffic_distribution;
 };
 
 struct HttpRequestHeader {
@@ -157,13 +128,13 @@ struct ProtocolInfo {
     uint16_t udp_checksum = 0;
     uint8_t icmp_type = 0;
     int icmp_code = 0;
-    bool arp_request; 
-    bool arp_reply; 
+    bool arp_request = false; 
+    bool arp_reply = false; 
     std::vector<pcpp::DnsType> dns_query_type;
 
-    std::string smtp_command;
-    std::string dhcp_message_type;
-    std::string sip_data;
+    std::string smtp_command = "";
+    std::string dhcp_message_type = "";
+    std::string sip_data = "";
 };
 
 struct SinglePacketInfo

@@ -19,22 +19,22 @@
 #include <climits>
 
 HandlePacketData data;
+FlowsFeature flowsFeature;
 
 std::vector<std::string> toString;
-std::vector<double> calculatePercentiles(const std::vector<double>& a);
-std::vector<double> getFlowsValues(const HandlePacketData* data, const char fieldName[]);
-std::pair<std::map<u_int16_t, int>, std::map<u_int16_t, int>> countFlowsByPorts(const HandlePacketData* data);
-std::pair<std::map<std::string, int>, std::map<std::string, int>> countFlowsByIP(const HandlePacketData* data);
-int countActiveFlowsEveryFiveSeconds(const HandlePacketData* data);
 bool isDownloadSessions(const FlowKey key, const LL &payload_size); 
-void insertFlowFeatureIntoMySQL(const std::vector<std::string>& data, std::unique_ptr<sql::Connection>& con);
+void calculateFlowsFeature(const HandlePacketData* data);
+void insertSingleFlowFeatureIntoMySQL(const std::vector<std::string>& data, std::unique_ptr<sql::Connection>& con);
 void insertProtocolInfoIntoMySQL(const std::vector<ProtocolInfo>& data, std::unique_ptr<sql::Connection>& con);
 void insertSinglePacketInfoIntoMySQL(const std::vector<SinglePacketInfo>& data, std::unique_ptr<sql::Connection>& con);
-void insertPacketsFeatureIntoMySQL(const PacketsFeature& features, std::unique_ptr<sql::Connection>& con);
-void insertWholeFlowsFeatureIntoMySQL(const WholeFlowsFeature& flowsFeature, std::unique_ptr<sql::Connection>& con);
+void insertPacketsFeatureIntoMySQL(const std::vector<PacketsFeature>& features, std::unique_ptr<sql::Connection>& con);
+void insertFlowsFeatureIntoMySQL(const FlowsFeature& flowsFeature, std::unique_ptr<sql::Connection>& con);
+std::pair<std::map<u_int16_t, int>, std::map<u_int16_t, int>> countFlowsByPorts(const HandlePacketData* data);
+std::pair<std::map<std::string, int>, std::map<std::string, int>> countFlowsByIP(const HandlePacketData* data);
+std::vector<double> calculatePercentiles(const std::vector<double>& a);
+std::vector<double> getFlowsValues(const HandlePacketData* data, const char fieldName[]);
 std::map<std::string, std::string> readConfig(const std::string& configFile); 
 
-WholeFlowsFeature flowsFeature;
 static struct option TLSFingerprintingOptions[] =
 {
 	{"interface",  required_argument, 0, 'i'},
@@ -80,15 +80,6 @@ void listInterfaces()
 		std::cout << "    -> Name: '" << (*iter)->getName() << "'   IP address: " << (*iter)->getIPv4Address().toString() << std::endl;
 	}
 	exit(0);
-}
-
-/**
- * The callback to be called when application is terminated by ctrl-c
- */
-static void onApplicationInterrupted(void* cookie)
-{
-	bool* shouldStop = (bool*)cookie;
-	*shouldStop = true;
 }
 
 /**
@@ -274,7 +265,7 @@ void handlePacket(RawPacket* rawPacket, const HandlePacketData* data)
 					SSLClientHelloMessage* clientHelloMessage = sslHandshakeLayer->getHandshakeMessageOfType<SSLClientHelloMessage>();
 					if (clientHelloMessage != NULL)
 					{
-						// // extract the TLS session
+						// extract the TLS session
 						SessionKey sessionKey = generateSessionKey(parsedPacket, true);
 						// extract the TLS fingerprint
 						ClientHelloFingerprint tlsFingerprint = generateClientHelloFingerprint(clientHelloMessage);
@@ -349,30 +340,6 @@ void calculateFlowFeature(const HandlePacketData* data)
 	}
 }
 
-void calculateOtherFeature(const HandlePacketData* data){
-	flowsFeature.max_active_flow_count = countActiveFlowsEveryFiveSeconds(data);
-	flowsFeature.flow_of_same_port = countFlowsByPorts(data);
-	flowsFeature.flow_of_same_ip = countFlowsByIP(data);
-
-	flowsFeature.flow_duration_distribution = calculatePercentiles(getFlowsValues(data, "dur"));
-	flowsFeature.packet_count_distribution = calculatePercentiles(getFlowsValues(data, "pktcnt"));
-	flowsFeature.byte_size_distribution = calculatePercentiles(getFlowsValues(data, "bytes_of_flow"));
-	flowsFeature.average_packet_size_distribution = calculatePercentiles(getFlowsValues(data, "avg_bytes_of_flow"));
-	flowsFeature.avg_ttl_distribution = calculatePercentiles(getFlowsValues(data, "avg_ttl"));
-	flowsFeature.window_size_distribution = calculatePercentiles(getFlowsValues(data, "avg_window_size"));
-	flowsFeature.end_to_end_lanteny_distribution = calculatePercentiles(getFlowsValues(data, "end_to_end_latency"));
-	flowsFeature.payload_entropy_distribution = calculatePercentiles(getFlowsValues(data, "entropy_of_payload"));
-
-	packetsFeature.packet_rate = packet_cnt_of_pcap  / (timestamp_of_last_packet - timestamp_of_first_packet) * 1e9;
-	packetsFeature.packet_rate = bytes_cnt_of_pcap  / (timestamp_of_last_packet - timestamp_of_first_packet) * 1e9;
-	packetsFeature.psh_between_time = calculateAverage(psh_interval_vec);
-	packetsFeature.urg_between_time = calculateAverage(urg_interval_vec);
-
-	if(downloadMetrics.download_session_count)
-		downloadMetrics.segmented_download = true;
-	
-}
-
 void classficationFlows(const HandlePacketData* data, SVMPredictor* model)
 {
 	auto flows = *(data->flows);
@@ -441,8 +408,7 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 	outputFileName = outputPath + fileNameWithoutExtension + ".csv";
 
 	std::ofstream outputFile(outputFileName.c_str());
-	if (!outputFile)
-	{
+	if (!outputFile){
 		EXIT_WITH_ERROR("Cannot open output file '" << outputFileName << "'");
 	}
 
@@ -450,8 +416,7 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 	writeFlowFeatureHeaderToOutputFile(outputFile);
 
 	// set BPF filter if provided by the user
-	if (!bpfFilter.empty())
-	{
+	if (!bpfFilter.empty()){
 		if (!reader->setFilter(bpfFilter))
 			EXIT_WITH_ERROR("Error in setting BPF filter to the pcap file");
 	}
@@ -464,6 +429,7 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 	std::vector<HttpResponse> webresponse;
 	std::vector<SinglePacketInfo> singlePacketInfoVector;
 	std::vector<ProtocolInfo> protocolInfoVector;
+	std::vector<PacketsFeature> packetsFeatureVector;
 
 	//data.outputFile = &outputFile;
 	data.stats = &stats;
@@ -472,8 +438,8 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 	data.WebResponse = &webresponse;
 	data.singlePacketInfoVector = &singlePacketInfoVector;
 	data.protocolInfoVector = &protocolInfoVector;
+	data.packetsFeatureVector= &packetsFeatureVector;
 
-	data.packetsFeature = &packetsFeature;
 	data.videoMetrics = &videoMetrics;
 	data.downloadMetrics = &downloadMetrics;
 	data.flowsFeature = &flowsFeature;
@@ -493,10 +459,10 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 	delete reader;
 
 	calculateFlowFeature(&data);
-	calculateOtherFeature(&data);
+	calculateFlowsFeature(&data);
 	writeToOutputData(&data, toString, fileNameWithoutExtension);
 
-	// 向数据库中写入数据
+	//向数据库中写入数据
 	try {
 		sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
 
@@ -504,11 +470,11 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 		auto config = readConfig("dbconfig.ini");
 		std::unique_ptr<sql::Connection> con(driver->connect(config["host"], config["user"], config["password"]));
 		con->setSchema("TrafficData");
-		insertFlowFeatureIntoMySQL(toString, con); // 这里假设toString是有效的参数
+		insertSingleFlowFeatureIntoMySQL(toString, con); // 这里假设toString是有效的参数
 		insertProtocolInfoIntoMySQL(protocolInfoVector, con);
 		insertSinglePacketInfoIntoMySQL(singlePacketInfoVector, con);
-		insertPacketsFeatureIntoMySQL(packetsFeature, con);
-		insertWholeFlowsFeatureIntoMySQL(flowsFeature, con);
+		insertPacketsFeatureIntoMySQL(packetsFeatureVector, con);
+		insertFlowsFeatureIntoMySQL(flowsFeature, con);
 	}catch(std::exception &e){
 		std::cerr << e.what() << std::endl;
 	}
@@ -522,94 +488,6 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 	//std::cout << "Output file was written to: '" << outputFileName << "'" << std::endl;
 }
 
-
-/**
- * packet capture callback - called whenever a packet arrives on the live interface (in live device capturing mode)
- */
-static void onPacketArrives(RawPacket* rawPacket, PcapLiveDevice* dev, void* cookie)
-{
-	HandlePacketData* data = static_cast<HandlePacketData*>(cookie);
-	handlePacket(rawPacket, data);
-}
-
-
-/**
- * Extract TLS fingerprints from a live interface
- */
-void doTlsFingerprintingOnLiveTraffic(const std::string& interfaceNameOrIP, std::string& outputFileName, const std::string& bpfFilter, std::string& modelPath)
-{
-	// extract pcap live device by interface name or IP address
-	PcapLiveDevice* dev = PcapLiveDeviceList::getInstance().getPcapLiveDeviceByIpOrName(interfaceNameOrIP);
-	if (dev == NULL)
-		EXIT_WITH_ERROR("Couldn't find interface by given IP address or name");
-
-	if (!dev->open())
-		EXIT_WITH_ERROR("Couldn't open interface");
-
-	// set output file name to interface name if not provided by the user
-	std::string outputPath = "./Output_backup/";
-	if (outputFileName.empty())
-	{
-		// take the device name and remove all chars which are not alphanumeric
-		outputFileName = std::string(dev->getName());
-		outputFileName.erase(remove_if(
-			outputFileName.begin(),
-			outputFileName.end(),
-			isNotAlphanumeric), outputFileName.end());
-
-		outputFileName = outputPath + outputFileName + ".csv";
-	}
-	else
-	{
-		size_t fileNameOffset = outputFileName.find_last_of("\\/") + 1;
-		size_t extensionOffset = outputFileName.find_last_of(".");
-		std::string fileNameWithoutExtension = outputFileName.substr(fileNameOffset, extensionOffset - fileNameOffset);
-		outputFileName = outputPath + fileNameWithoutExtension + ".csv";
-	}
-
-	// open output file
-	std::ofstream outputFile(outputFileName.c_str());
-	if (!outputFile)
-	{
-		EXIT_WITH_ERROR("Cannot open output file '" << outputFileName << "'");
-	}
-
-	// write the column headers to the output file
-	//writeFlowFeatureHeaderToOutputFile(outputFile);
-
-	// set BPF filter if provided by the user
-	if (!bpfFilter.empty())
-	{
-		if (!dev->setFilter(bpfFilter))
-			EXIT_WITH_ERROR("Error in setting BPF filter to interface");
-	}
-
-	std::cout << "Start capturing packets from '" << interfaceNameOrIP << "'..." << std::endl;
-
-	std::map<SessionKey, TLSFingerprint*> stats;
-	HandlePacketData data;
-	//data.outputFile = &outputFile;
-	data.stats = &stats;
-
-	// start capturing packets. Each packet arrived will be handled by the onPacketArrives method
-	dev->startCapture(onPacketArrives, &data);
-
-	// register the on app close event to print summary stats on app termination
-	bool shouldStop = false;
-	ApplicationEventHandler::getInstance().onApplicationInterrupted(onApplicationInterrupted, &shouldStop);
-
-	// run in an endless loop until the user press ctrl+c
-	while(!shouldStop)
-		multiPlatformSleep(1);
-
-	// stop capturing and close the live device
-	dev->stopCapture();
-	dev->close();
-
-	// printStats(flows);
-
-	std::cout << "Output file was written to: '" << outputFileName << "'" << std::endl;
-}
 
 /**
  * main method of this utility
@@ -661,10 +539,6 @@ int main(int argc, char* argv[])
 	{
 		doTlsFingerprintingOnPcapFile(inputPcapFileName, outputFileName, bpfFilter, modelPath);
 	}
-	else
-	{
-		doTlsFingerprintingOnLiveTraffic(interfaceNameOrIP, outputFileName, bpfFilter, modelPath);
-	}
 }
 
 int countActiveFlowsEveryFiveSeconds(const HandlePacketData* data) {
@@ -677,11 +551,6 @@ int countActiveFlowsEveryFiveSeconds(const HandlePacketData* data) {
         minStart = std::min(minStart, flow->start_timestamp);
         maxEnd = std::max(maxEnd, flow->latest_timestamp);
     }
-
-    // 计算时间窗口的数量
-    int duration = (maxEnd - minStart) / 1e9;
-    auto intervals = (duration / 5) + 1;
-
     // 初始化结果向量
     int res = 0;
 
@@ -712,4 +581,22 @@ bool isDownloadSessions(const FlowKey key, const LL &payload_size) {
             }
     }
     return false;
+}
+
+void calculateFlowsFeature(const HandlePacketData* data){
+	flowsFeature.max_active_flow_count = countActiveFlowsEveryFiveSeconds(data);
+	flowsFeature.flow_of_same_port = countFlowsByPorts(data);
+	flowsFeature.flow_of_same_ip = countFlowsByIP(data);
+
+	flowsFeature.flow_duration_distribution = calculatePercentiles(getFlowsValues(data, "dur"));
+	flowsFeature.packet_count_distribution = calculatePercentiles(getFlowsValues(data, "pktcnt"));
+	flowsFeature.byte_size_distribution = calculatePercentiles(getFlowsValues(data, "bytes_of_flow"));
+	flowsFeature.average_packet_size_distribution = calculatePercentiles(getFlowsValues(data, "avg_bytes_of_flow"));
+	flowsFeature.avg_ttl_distribution = calculatePercentiles(getFlowsValues(data, "avg_ttl"));
+	flowsFeature.window_size_distribution = calculatePercentiles(getFlowsValues(data, "avg_window_size"));
+	flowsFeature.end_to_end_lanteny_distribution = calculatePercentiles(getFlowsValues(data, "end_to_end_latency"));
+	flowsFeature.payload_entropy_distribution = calculatePercentiles(getFlowsValues(data, "entropy_of_payload"));
+
+	if(downloadMetrics.download_session_count)
+		downloadMetrics.segmented_download = true;
 }
