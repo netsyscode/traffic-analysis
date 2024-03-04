@@ -103,7 +103,7 @@ void Flow::terminate(bool download_flag)
 	flowFeature.count_of_UDPpackets = udp_packets;
 	flowFeature.count_of_ICMPpackets = icmp_packets;
 
-	flowFeature.end_to_end_latency = flowFeature.dur / pkt_count;
+	flowFeature.end_to_end_latency = flowFeature.dur / pkt_count;// 有问题
 	flowFeature.avg_window_size = static_cast<double>(window_size_ls) / pkt_count;
 	flowFeature.avg_ttl = static_cast<double>(ttl) / pkt_count;
 	flowFeature.avg_payload_size = static_cast<double>(payload_size) / pkt_count;
@@ -203,7 +203,7 @@ bool FlowKey::operator==(const FlowKey& e) const
 std::pair<IPAddress, IPAddress> getIPs(const Packet* packet)
 {
 	IPAddress srcIP, dstIP;
-	if (packet->isPacketOfType(IP))
+	if (packet->isPacketOfType(IPv4))
 	{
 		const IPLayer* ipLayer = packet->getLayerOfType<IPLayer>();
 		srcIP = ipLayer->getSrcIPAddress();

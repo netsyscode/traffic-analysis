@@ -393,16 +393,45 @@ void Flow::updateFeature(RawPacket* pkt) {
 		// 统计与HTTP请求相关的特征
 		pcpp::HttpRequestLayer* httpRequestLayer = parsedPacket.getLayerOfType<pcpp::HttpRequestLayer>();
         if (httpRequestLayer != nullptr) {
+			HttpRequest webrequest;
+			webrequest.url = httpRequestLayer->getFirstLine()->getUri();
+			webrequest.method = httpRequestLayer->getFirstLine()->getMethod();
+			webrequest.httpversion = httpRequestLayer->getFirstLine()->getVersion();
+
+			pcpp::HeaderField* requestedWithHeader = httpRequestLayer->getFieldByName("X-Requested-With");
+			if (requestedWithHeader != nullptr && requestedWithHeader->getFieldValue() == "XMLHttpRequest") {
+				// 获取请求行的方法和URI
+				webrequest.method = httpRequestLayer->getFirstLine()->getMethod();
+				webrequest.url = httpRequestLayer->getFirstLine()->getUri();
+				webrequest.is_Ajax = true;
+			}
+
+			// 检查是否存在Upgrade头部且值为websocket
+			pcpp::HeaderField* upgradeHeader = httpRequestLayer->getFieldByName("Upgrade");
+			// 同时检查Connection头部是否包含Upgrade
+			pcpp::HeaderField* connectionHeader = httpRequestLayer->getFieldByName("Connection");
+
+			if (upgradeHeader != nullptr && upgradeHeader->getFieldValue() == "websocket" &&
+				connectionHeader != nullptr && connectionHeader->getFieldValue().find("Upgrade") != std::string::npos) {
+				// 输出WebSocket升级请求信息
+				webrequest.method = httpRequestLayer->getFirstLine()->getMethod();
+				webrequest.url = httpRequestLayer->getFirstLine()->getUri();
+				webrequest.is_Websocket = true;
+			}
 
 			// 检测是否是具有断点续传能力
 			if(downloadMetrics.resume_downloading)
 				if(checkForRangeHeader(pkt))
 					downloadMetrics.resume_downloading = true;
-
-			HttpRequest webrequest;
-			webrequest.url = httpRequestLayer->getFirstLine()->getUri();
-			webrequest.method = httpRequestLayer->getFirstLine()->getMethod();
-			webrequest.httpversion = httpRequestLayer->getFirstLine()->getVersion();
+			
+			// 检查 URI 是否以静态资源的扩展名结束
+			auto uri = webrequest.url;
+			if (uri.find(".png") != std::string::npos || uri.find(".jpg") != std::string::npos ||
+				uri.find(".jpeg") != std::string::npos || uri.find(".css") != std::string::npos ||
+				uri.find(".js") != std::string::npos || uri.find(".svg") != std::string::npos ||
+				uri.find(".gif") != std::string::npos) {
+				webrequest.has_static_resource = true;  // 标记发现了至少一个静态资源请求
+			}
 
 			auto field = httpRequestLayer->getFieldByName("PCPP_HTTP_HOST_FIELD");//encrypted?
 			webrequest.host = (field != nullptr) ? field->getFieldValue() : "";
@@ -441,6 +470,25 @@ void Flow::updateFeature(RawPacket* pkt) {
 			field = httpRequestLayer->getFieldByName("PCPP_HTTP_SERVER_FIELD");
 			webrequest.server = (field != nullptr) ? field->getFieldValue() : "";
 
+			uint16_t srcPort = ntohs(tcpLayer->getTcpHeader()->portSrc);
+			uint16_t dstPort = ntohs(tcpLayer->getTcpHeader()->portDst);
+
+			// 假设端口 80 为 HTTP，443 为 HTTPS
+			if (srcPort == 80 || dstPort == 80) {
+				webrequest.is_Http = true;
+			} else if (srcPort == 443 || dstPort == 443) {
+				webrequest.is_Https = true;
+			}
+
+			// 基于SSL/TLS握手进一步验证HTTPS
+			if (webrequest.is_Https || (!webrequest.is_Http && !webrequest.is_Https)) { // 如果已知是HTTPS或者端口号不明确
+				pcpp::SSLHandshakeLayer* sslHandshakeLayer = parsedPacket.getLayerOfType<pcpp::SSLHandshakeLayer>();
+				if (sslHandshakeLayer != nullptr) {
+					webrequest.is_Https = true; // 确认找到SSL/TLS握手，因此是HTTPS
+				} else {
+					webrequest.is_Https = false; // 未找到SSL/TLS握手
+				}
+			}
 			data.WebRequest->push_back(webrequest);
         }
 
@@ -465,6 +513,9 @@ void Flow::updateFeature(RawPacket* pkt) {
             }
 			data.WebResponse->push_back(webresponse);
         }
+
+		uint16_t srcPort = ntohs(tcpLayer->getTcpHeader()->portSrc);
+		uint16_t dstPort = ntohs(tcpLayer->getTcpHeader()->portDst);
 	}
 		// 解析UDP协议
 		pcpp::UdpLayer* udpLayer = parsedPacket.getLayerOfType<pcpp::UdpLayer>();
@@ -547,6 +598,22 @@ void Flow::updateFeature(RawPacket* pkt) {
 			protocolInfo.ethernet_type = ethType;
 		}
 
+		// 802.11帧
+		// pcpp::Dot11Layer* dot11Layer = parsedPacket.getLayerOfType<pcpp::Dot11Layer>();
+		// if (dot11Layer != nullptr) {
+		// 	// 确认是否是信标帧或探测响应帧
+		// 	if (dot11Layer->getDot11Header()->frameControl.type == pcpp::DOT11_BEACON_FRAME ||
+		// 		dot11Layer->getDot11Header()->frameControl.type == pcpp::DOT11_PROBE_RESP) {
+				
+		// 		// 提取SSID信息
+		// 		pcpp::Dot11BeaconFrame* beaconFrame = dynamic_cast<pcpp::Dot11BeaconFrame*>(dot11Layer);
+		// 		if (beaconFrame != nullptr) {
+		// 			std::string ssid = beaconFrame->getSSID();
+		// 			// 使用SSID进行你的逻辑处理
+		// 		}
+		// 	}
+		// }
+
 		// 解析VLAN协议
 		pcpp::VlanLayer* vlanLayer = parsedPacket.getLayerOfType<pcpp::VlanLayer>();
 		if (vlanLayer != nullptr) {
@@ -578,16 +645,9 @@ void Flow::updateFeature(RawPacket* pkt) {
 		// 解析DNS协议
 		pcpp::DnsLayer* dnsLayer = parsedPacket.getLayerOfType<pcpp::DnsLayer>();
 		if (dnsLayer != nullptr) {
-			// Iterate over DNS queries if exist
-			if (dnsLayer->getFirstQuery() != nullptr) {
-				std::vector<pcpp::DnsType> DnsQueryType;
-				for (pcpp::DnsQuery* query = dnsLayer->getFirstQuery(); query != nullptr; query = dnsLayer->getNextQuery(query)) {
-					pcpp::DnsType dnsQueryType = query->getDnsType(); 
-					DnsQueryType.push_back(dnsQueryType);
-				}
-				protocolInfo.dns_query_type = DnsQueryType;
-			}
+			protocolInfo.dns_transaction_id = dnsLayer->getDnsHeader()->transactionID;
 		}
+
 		// 解析 SMTP 和 FTP 命令/响应
 		if (tcpLayer != nullptr) {
 			std::string payload(reinterpret_cast<const char*>(tcpLayer->getLayerPayload()), tcpLayer->getLayerPayloadSize());
@@ -606,7 +666,7 @@ void Flow::updateFeature(RawPacket* pkt) {
 
 		}
 
-		// 解析 SIP 请求方法和响应状态码
+	// 解析 SIP 请求方法和响应状态码f
 		pcpp::SipLayer* sipLayer = parsedPacket.getLayerOfType<pcpp::SipLayer>();
 		if (sipLayer != nullptr) {
 			std::string sipData(reinterpret_cast<const char*>(sipLayer->getData()), sipLayer->getDataLen());

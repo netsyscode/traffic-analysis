@@ -34,7 +34,6 @@ struct FlowFeature
 	double end_to_end_latency = 0.0, avg_window_size, avg_ttl = 0.0, avg_payload_size = 0.0;
 	int count_of_ret_packets = 0, count_of_syn_packets = 0, count_of_fin_packets = 0, count_of_rst_packets = 0, count_of_ack_packets = 0, count_of_psh_packets = 0, count_of_urg_packets = 0;
 	double entropy_of_payload = 0.0;
-	int count_of_forward_packets = 0, count_of_backward_packets = 0;
 };
 
 // 流间特征
@@ -83,6 +82,11 @@ struct HttpRequest {
 	std::string content_type;
 	std::string server;
 	std::string accept_language;
+	bool is_Ajax = false;
+	bool is_Websocket = false;
+	bool has_static_resource = false;
+	bool is_Http = false;
+	bool is_Https = false;
 };
 
 struct HttpResponse
@@ -130,7 +134,7 @@ struct ProtocolInfo {
     int icmp_code = 0;
     bool arp_request = false; 
     bool arp_reply = false; 
-    std::vector<pcpp::DnsType> dns_query_type;
+    uint16_t dns_transaction_id = 0;
 
     std::string smtp_command = "";
     std::string dhcp_message_type = "";
@@ -187,14 +191,11 @@ struct VideoStreamMetrics {
 struct DownloadMetrics {
 	LL download_bytes = 0;
 	double duration = 0.0;
-	double traffic_ratio= 0.0;
 	double average_download_rate= 0.0;
 	int packet_loss_count = 0;
 	double retransmitted_packets_ratio= 0.0;
 	int download_session_count = 0;
-	int parallel_threads = 0;
 	double request_response_delay= 0.0;
 	bool segmented_download = false;
 	bool resume_downloading = false;
-	double peak_trough_traffic = 0.0;
 };
