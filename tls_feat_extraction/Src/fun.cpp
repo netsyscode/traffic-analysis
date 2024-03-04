@@ -9,6 +9,8 @@ void Flow::terminate(bool download_flag)
 {
     // 包间特征
     PacketsFeature packetsFeature;
+    packetsFeature.app_label = app_label;
+    
     packetsFeature.max_packet_size = max_packet_size;
     packetsFeature.min_packet_size = min_packet_size;
     packetsFeature.max_interval_between_packets = max_interval_between_packets;
@@ -32,76 +34,54 @@ void Flow::terminate(bool download_flag)
 	double duration = (double(latest_timestamp) - start_timestamp) / 1e9;//秒为单位
 	flowFeature.dur = duration;
 
-	// 吞吐率
-	if (latest_timestamp == start_timestamp) {
-		appbandwith = 0;
-	}else{
-		appbandwith = (double)packets_size_sum / duration * 8 / 1e3;//单位是kbps	
-	}
-
 	if (cnt_len_over_1000 >= 1)
 		flowFeature.ave_pkt_size_over_1000 = (double)ave_pkt_size_over_1000 / cnt_len_over_1000;
 	else flowFeature.ave_pkt_size_over_1000 = 0;
 
+    // 吞吐率
+	if (latest_timestamp == start_timestamp) {
+		bandwith = 0;
+	}else{
+		bandwith = (double)packets_size_sum / duration * 8 / 1e3;//单位是kbps	
+	}
+
 	// 计算 len < 300的平均包长
 	if (cnt_len_under_300 >= 1)
 		flowFeature.ave_pkt_size_under_300 = (double)ave_pkt_size_under_300 / cnt_len_under_300;
-	else flowFeature.ave_pkt_size_under_300 = 0;
-
-	flowFeature.payload_bandwidth = payload_bandwidth;
 
 	// 计算RTT
 	if(!rtts.empty()){
 		double sum = std::accumulate(rtts.begin(), rtts.end(), 0);
 		flowFeature.ave_rtt = static_cast<double>(sum) / rtts.size();
-		auto min_max = std::minmax_element(rtts.begin(), rtts.end());
-		flowFeature.rtt_min = *min_max.first;
-		flowFeature.rtt_max = *min_max.second;
-		flowFeature.rtt_range = flowFeature.rtt_max - flowFeature.rtt_min;
 		flowFeature.pktlen = packets_size_sum;
-	}else{
-		flowFeature.ave_rtt = 0;
-		flowFeature.rtt_min = 0;
-		flowFeature.rtt_max = 0;
-		flowFeature.rtt_range = 0;
 	}
-	
 	if (pkt_count >= 1){
 		flowFeature.ret_rate = double(ret) / pkt_count;
 		flowFeature.udp_nopayload_rate = double(udp_nopayload_cnt) / pkt_count;
 		ave_pkt_size = double(packets_size_sum) / pkt_count;
 		flowFeature.bytes_of_payload = payload_size;
 	}
-	else{
-		flowFeature.ret_rate = 0;
-		flowFeature.udp_nopayload_rate = 0;
-		ave_pkt_size = 0;
-		flowFeature.bytes_of_payload = 0;
-	}	
+
 	if (pkt_count > 1){
 		ave_interval = duration / double(pkt_count-1);
 	}
-	else{
-		ave_interval = 0;
-	}	
-	flowFeature.itvl = ave_interval;
-
-	flowFeature.bw = appbandwith;
-	flowFeature.pktlen = ave_pkt_size;
-	flowFeature.thp = throughput;
-	flowFeature.cnt_len_over_1000 = cnt_len_over_1000;
-	flowFeature.pktcnt = pkt_count;
 	packet_cnt_of_pcap += pkt_count;
 	bytes_cnt_of_pcap += packets_size_sum;
 
 	flowFeature.bytes_of_flow = packets_size_sum;
-	packets_size_sum = 0;//统计的是一条流的字节数
+
 
 	flowFeature.header_of_packets = packets_size_sum - payload_size;
+    packets_size_sum = 0;//统计的是一条流的字节数
 	flowFeature.bytes_of_ret_packets = ret_bytes;
 	flowFeature.count_of_TCPpackets = tcp_packets;
 	flowFeature.count_of_UDPpackets = udp_packets;
 	flowFeature.count_of_ICMPpackets = icmp_packets;
+
+    flowFeature.itvl = ave_interval;
+	flowFeature.bw = bandwith;
+	flowFeature.pktlen = ave_pkt_size;
+	flowFeature.pktcnt = pkt_count;
 
 	flowFeature.end_to_end_latency = flowFeature.dur / pkt_count;// 有问题
 	flowFeature.avg_window_size = static_cast<double>(window_size_ls) / pkt_count;
@@ -119,6 +99,39 @@ void Flow::terminate(bool download_flag)
 		downloadMetrics.download_bytes += flowFeature.bytes_of_flow;
 		downloadMetrics.packet_loss_count += flowFeature.count_of_ret_packets;
 	}
+
+    auto key = this->flowKey;
+    std::map<FlowKey, Flow*>::iterator flowIter = data.flows->find(key);
+    if (flowIter != data.flows->end()) {
+        const FlowFeature* flowFeatureInfo = &(flowIter->second->flowFeature);
+        if (flowFeatureInfo->tlsFingerprint != NULL) {
+            auto clientDigest = flowFeatureInfo->tlsFingerprint->clientHelloFingerprint.toDigest().digest;
+            auto serverDigest = flowFeatureInfo->tlsFingerprint->serverHelloFingerprint.toDigest().digest;
+
+            flowFeature.client_TLS_version = std::to_string((u_int32_t) clientDigest[0]);
+            flowFeature.client_cipher_suite = std::to_string((u_int32_t) clientDigest[1]);
+            flowFeature.client_extensions = std::to_string((u_int32_t) clientDigest[2]);
+            flowFeature.client_supported_groups = std::to_string((u_int32_t) clientDigest[3]);
+            flowFeature.client_ecformat = std::to_string((u_int32_t) clientDigest[4]);
+
+            flowFeature.server_TLS_version = std::to_string((u_int32_t) serverDigest[0]);
+            flowFeature.server_cipher_suite = std::to_string((u_int32_t) serverDigest[1]);
+            flowFeature.server_extensions = std::to_string((u_int32_t) serverDigest[2]);
+        }
+    }
+
+    flowFeature.app_label = app_label;
+    flowFeature.startts = nanosecondsToDatetime(start_timestamp);
+    flowFeature.srcIP = flowKey.srcIP.toString();
+    flowFeature.dstIP = flowKey.dstIP.toString();
+    flowFeature.srcPort = flowKey.srcPort;
+    flowFeature.dstPort = flowKey.dstPort;
+    flowFeature.bw = bandwith;
+
+    flowFeature.max_size_of_packet = max_packet_size;
+    flowFeature.min_size_of_packet = min_packet_size;
+
+    data.flowFeatureVector->push_back(flowFeature);
 }
 
 Flow::Flow(FlowKey flowKey)//构造函数
@@ -142,7 +155,6 @@ Flow::Flow(FlowKey flowKey)//构造函数
 
     // 初始化带宽、吞吐量等
     bandwith = 0;
-    appbandwith = 0;
     throughput = 0;
 	duration = 0;
 
@@ -152,8 +164,6 @@ Flow::Flow(FlowKey flowKey)//构造函数
     ave_interval = 0;
     ave_windows = 0;
     ave_rtt = 0;
-    rtt_min = 0;
-    rtt_max = 0;
     interval_ls = 0;
     rtt_ls = 0;
 
@@ -390,8 +400,8 @@ std::pair<std::map<std::string, int>, std::map<std::string, int>> countFlowsByIP
     std::map<std::string, int> srcIPCounts, dstIPCounts;
     for (const auto& pair : *data->flows) {
         const Flow* flow = pair.second;
-        std::string srcIP = flow->flowFeature.srcIP.toString(); 
-        std::string dstIP = flow->flowFeature.dstIP.toString(); 
+        std::string srcIP = flow->flowKey.srcIP.toString(); 
+        std::string dstIP = flow->flowKey.dstIP.toString(); 
         srcIPCounts[srcIP]++;
         dstIPCounts[dstIP]++;
     }

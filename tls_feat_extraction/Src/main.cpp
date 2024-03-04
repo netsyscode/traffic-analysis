@@ -24,9 +24,9 @@ FlowsFeature flowsFeature;
 std::vector<std::string> toString;
 bool isDownloadSessions(const FlowKey key, const LL &payload_size); 
 void calculateFlowsFeature(const HandlePacketData* data);
-void insertSingleFlowFeatureIntoMySQL(const std::vector<std::string>& data, std::unique_ptr<sql::Connection>& con);
-void insertProtocolInfoIntoMySQL(const std::vector<ProtocolInfo>& data, std::unique_ptr<sql::Connection>& con);
-void insertSinglePacketInfoIntoMySQL(const std::vector<SinglePacketInfo>& data, std::unique_ptr<sql::Connection>& con);
+void insertFlowFeatureIntoMySQL(const std::vector<FlowFeature>& features, std::unique_ptr<sql::Connection>& con);
+void insertProtocolFeatureIntoMySQL(const std::vector<ProtocolInfo>& data, std::unique_ptr<sql::Connection>& con);
+void insertPacketFeatureIntoMySQL(const std::vector<SinglePacketInfo>& data, std::unique_ptr<sql::Connection>& con);
 void insertPacketsFeatureIntoMySQL(const std::vector<PacketsFeature>& features, std::unique_ptr<sql::Connection>& con);
 void insertFlowsFeatureIntoMySQL(const FlowsFeature& flowsFeature, std::unique_ptr<sql::Connection>& con);
 std::pair<std::map<u_int16_t, int>, std::map<u_int16_t, int>> countFlowsByPorts(const HandlePacketData* data);
@@ -85,40 +85,40 @@ void listInterfaces()
 /**
  * Write the column headers to the output file
  */
-void writeFlowFeatureHeaderToOutputFile(std::ofstream& outputFile)
-{
-    const char separator = '\t';
-	outputFile <<						
-		"Src IP" << separator <<
-		"Dst IP" << separator <<
-		"Src Port" << separator <<
-		"Dst Port" << separator <<
-		"Client TlsVersion" << separator <<
-		"Client Cipher Suits" << separator <<
-		"Client Extensions" << separator <<
-		"Client SupportedGroups" << separator <<
-		"Client EcPointFormats" << separator <<
-		"Server TlsVersion" << separator <<
-		"Server cipherSuite" << separator <<
-		"Server Extensions" << separator <<
-		"AppBandwidth" << separator <<
-		"Flow Duration" << separator <<
-		"Avg Packet Interval" << separator <<
-		"Packets count" << separator << 
-		"AvgPacket Length" << separator <<
-		//"Throughoutput" << separator <<
-		"AvgPacket Length under 300" << separator <<
-		"AvgPacket Length over 1000" << separator <<
-		//"Payload Length" << separator <<
-		//"Payload Bandwidth" << separator <<
-		"UDP without Payload Rate" << separator <<
-		"RTT" << separator <<
-		// "RTT Min" << separator <<
-		// "RTT Max" << separator <<
-		// "RTT Range" << separator <<
-		"Retransfer Rate" <<
-		std::endl;
-}
+// void writeFlowFeatureHeaderToOutputFile(std::ofstream& outputFile)
+// {
+//     const char separator = '\t';
+// 	outputFile <<						
+// 		"Src IP" << separator <<
+// 		"Dst IP" << separator <<
+// 		"Src Port" << separator <<
+// 		"Dst Port" << separator <<
+// 		"Client TlsVersion" << separator <<
+// 		"Client Cipher Suits" << separator <<
+// 		"Client Extensions" << separator <<
+// 		"Client SupportedGroups" << separator <<
+// 		"Client EcPointFormats" << separator <<
+// 		"Server TlsVersion" << separator <<
+// 		"Server cipherSuite" << separator <<
+// 		"Server Extensions" << separator <<
+// 		"AppBandwidth" << separator <<
+// 		"Flow Duration" << separator <<
+// 		"Avg Packet Interval" << separator <<
+// 		"Packets count" << separator << 
+// 		"AvgPacket Length" << separator <<
+// 		//"Throughoutput" << separator <<
+// 		"AvgPacket Length under 300" << separator <<
+// 		"AvgPacket Length over 1000" << separator <<
+// 		//"Payload Length" << separator <<
+// 		//"Payload Bandwidth" << separator <<
+// 		"UDP without Payload Rate" << separator <<
+// 		"RTT" << separator <<
+// 		// "RTT Min" << separator <<
+// 		// "RTT Max" << separator <<
+// 		// "RTT Range" << separator <<
+// 		"Retransfer Rate" <<
+// 		std::endl;
+// }
 
 // store the finger print of sessions
 std::map<SessionKey, TLSFingerprint> tlsFingerprintMap;
@@ -206,7 +206,6 @@ void writeToOutputData(const HandlePacketData* data, std::vector<std::string> &t
 					toString.push_back("0");
 				}
 			}
-
 			toString.push_back(std::to_string(flowFeature->bw));//flowBandwidth
 			toString.push_back(std::to_string(flowFeature->itvl));//flowInterval
 			toString.push_back(std::to_string(flowFeature->pktcnt));//packetCount
@@ -244,7 +243,6 @@ void handlePacket(RawPacket* rawPacket, const HandlePacketData* data)
 				long sec = rawPacket->getPacketTimeStamp().tv_sec;
 				long nsec = rawPacket->getPacketTimeStamp().tv_nsec;
 				flow->start_timestamp = sec * 1000000000LL + nsec;
-
 				if(data->flows->empty()) timestamp_of_first_packet = flow->start_timestamp;
 				flow->latter_timestamp = flow->start_timestamp;
 				data->flows->insert(std::pair<FlowKey, Flow*>(*flowKey, flow));
@@ -315,18 +313,14 @@ void handlePacket(RawPacket* rawPacket, const HandlePacketData* data)
 	}
 }
 
+// 所有数据已存于流中
 void calculateFlowFeature(const HandlePacketData* data)
 {
 	if (data->flows->size() >= 1) {
 		// 处理每一条流
 		for (auto it = data->flows->begin(); it != data->flows->end(); ++it) {
-			if(isDownloadSessions(it->second->flowKey, it->second->payload_size))
-				download_flag = true;
-			it->second->terminate(download_flag);
-			download_flag = false;
 			// build SeesionKey from FlowKey, add TLS fingerprint to flow feature
 			SessionKey sessionKey;
-	
 			fillSessionKeyWithFlowKey(sessionKey, it->first, true);//from client
 			if (data->stats->find(sessionKey) != data->stats->end()) {
 				it->second->flowFeature.tlsFingerprint = data->stats->at(sessionKey);
@@ -336,6 +330,11 @@ void calculateFlowFeature(const HandlePacketData* data)
 				if (data->stats->find(sessionKey) != data->stats->end())
 					it->second->flowFeature.tlsFingerprint = data->stats->at(sessionKey);
 			}
+
+			if(isDownloadSessions(it->second->flowKey, it->second->payload_size))
+				download_flag = true;
+			it->second->terminate(download_flag);
+			download_flag = false;
 		}
 	}
 }
@@ -368,17 +367,11 @@ void classficationFlows(const HandlePacketData* data, SVMPredictor* model)
 			x[10] = flowFeature->bw;
 			x[11] = flowFeature->itvl;
 			x[12] = flowFeature->pktlen;
-			x[13] = flowFeature->thp;
 			x[14] = flowFeature->ave_pkt_size_under_300;
 			x[15] = flowFeature->ave_pkt_size_over_1000;
-			x[16] = flowFeature->payload_size;
-			x[17] = flowFeature->payload_bandwidth;
 			x[18] = flowFeature->udp_nopayload_rate;
 			x[19] = flowFeature->ave_rtt;
-			x[20] = flowFeature->rtt_min;	
-			x[21] = flowFeature->rtt_max;	
-			x[22] = flowFeature->rtt_range;	
-			x[23] = flowFeature->ret_rate;
+			x[23] = flowFeature->ret_rate; // ???
 			std::pair<int, double> temp = model->predictForPredictedClass(x);
 			//flow->flowFeature.res = temp.first;
 			//flow->flowFeature.dis = temp.second;
@@ -413,7 +406,7 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 	}
 
 	// write the column headers to the output file
-	writeFlowFeatureHeaderToOutputFile(outputFile);
+	//writeFlowFeatureHeaderToOutputFile(outputFile);
 
 	// set BPF filter if provided by the user
 	if (!bpfFilter.empty()){
@@ -430,6 +423,7 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 	std::vector<SinglePacketInfo> singlePacketInfoVector;
 	std::vector<ProtocolInfo> protocolInfoVector;
 	std::vector<PacketsFeature> packetsFeatureVector;
+    std::vector<FlowFeature> flowFeatureVector;	
 
 	//data.outputFile = &outputFile;
 	data.stats = &stats;
@@ -439,6 +433,7 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 	data.singlePacketInfoVector = &singlePacketInfoVector;
 	data.protocolInfoVector = &protocolInfoVector;
 	data.packetsFeatureVector= &packetsFeatureVector;
+	data.flowFeatureVector = &flowFeatureVector;
 
 	data.videoMetrics = &videoMetrics;
 	data.downloadMetrics = &downloadMetrics;
@@ -460,7 +455,7 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 
 	calculateFlowFeature(&data);
 	calculateFlowsFeature(&data);
-	writeToOutputData(&data, toString, fileNameWithoutExtension);
+	app_label++;
 
 	//向数据库中写入数据
 	try {
@@ -470,9 +465,9 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 		auto config = readConfig("dbconfig.ini");
 		std::unique_ptr<sql::Connection> con(driver->connect(config["host"], config["user"], config["password"]));
 		con->setSchema("TrafficData");
-		insertSingleFlowFeatureIntoMySQL(toString, con); // 这里假设toString是有效的参数
-		insertProtocolInfoIntoMySQL(protocolInfoVector, con);
-		insertSinglePacketInfoIntoMySQL(singlePacketInfoVector, con);
+		insertFlowFeatureIntoMySQL(flowFeatureVector, con);
+		insertProtocolFeatureIntoMySQL(protocolInfoVector, con);
+		insertPacketFeatureIntoMySQL(singlePacketInfoVector, con);
 		insertPacketsFeatureIntoMySQL(packetsFeatureVector, con);
 		insertFlowsFeatureIntoMySQL(flowsFeature, con);
 	}catch(std::exception &e){
@@ -584,6 +579,7 @@ bool isDownloadSessions(const FlowKey key, const LL &payload_size) {
 }
 
 void calculateFlowsFeature(const HandlePacketData* data){
+	flowsFeature.app_label = app_label;
 	flowsFeature.max_active_flow_count = countActiveFlowsEveryFiveSeconds(data);
 	flowsFeature.flow_of_same_port = countFlowsByPorts(data);
 	flowsFeature.flow_of_same_ip = countFlowsByIP(data);

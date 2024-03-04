@@ -69,7 +69,7 @@ public:
 	int pkt_count = 0;
 	uint16_t ttl = 0;
 	LL packets_size_sum = 0, app_packets_size_sum = 0, header_len_ls = 0;
-	double bandwith = 0.0, appbandwith = 0.0 ,throughput = 0.0, duration = 0.0;
+	double bandwith = 0.0, throughput = 0.0, duration = 0.0;
 	double ave_pkt_size = 0.0, app_ave_pkt_size = 0.0,ave_interval = 0.0, ave_windows = 0.0, ave_rtt = 0.0, rtt_min = 0.0, rtt_max = 0.0, interval_ls = 0.0, rtt_ls = 0.0;
 	int tcp_packets = 0, udp_packets = 0, icmp_packets = 0;
 	
@@ -100,7 +100,7 @@ public:
 	LL last_psh = 0;
 	LL last_urg = 0;
 	double diff = 0.0;
-	int max_packet_size = 0, min_packet_size = 0;
+	int max_packet_size = 0, min_packet_size = 1<<16;
 	double max_interval_between_packets = 0.0, min_interval_between_packets = 0.0;
 };
 

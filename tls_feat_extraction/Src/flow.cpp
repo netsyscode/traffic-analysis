@@ -233,6 +233,7 @@ void Flow::updateFeature(RawPacket* pkt) {
 	SinglePacketInfo singlePacketInfo;
 	singlePacketInfo.packet_length = pktLen;
 	packets_size.push_back(pktLen);
+	
 	//统计包长大于1000的包数量
 	if (pktLen > 1000) {
 		cnt_len_over_1000++;
@@ -249,7 +250,8 @@ void Flow::updateFeature(RawPacket* pkt) {
 		pkt_count += 1;
 	}
 	//累加包长
-	packets_size_sum += pktLen;//单位
+	packets_size_sum += pktLen;//单位max
+
 	max_packet_size = std::max(max_packet_size, pktLen);
 	min_packet_size = std::min(min_packet_size, pktLen);
 
@@ -270,6 +272,7 @@ void Flow::updateFeature(RawPacket* pkt) {
 	}
 
 	ProtocolInfo protocolInfo;
+	protocolInfo.app_label = app_label;
 	pcpp::Packet parsedPacket(pkt);
 	pcpp::TcpLayer* tcpLayer = parsedPacket.getLayerOfType<pcpp::TcpLayer>();
 
@@ -514,8 +517,6 @@ void Flow::updateFeature(RawPacket* pkt) {
 			data.WebResponse->push_back(webresponse);
         }
 
-		uint16_t srcPort = ntohs(tcpLayer->getTcpHeader()->portSrc);
-		uint16_t dstPort = ntohs(tcpLayer->getTcpHeader()->portDst);
 	}
 		// 解析UDP协议
 		pcpp::UdpLayer* udpLayer = parsedPacket.getLayerOfType<pcpp::UdpLayer>();
@@ -676,6 +677,7 @@ void Flow::updateFeature(RawPacket* pkt) {
 				protocolInfo.sip_data = sipMatches[1];
 			}
 		}
+		singlePacketInfo.app_label = app_label;
 		data.protocolInfoVector->push_back(protocolInfo);
 		data.singlePacketInfoVector->push_back(singlePacketInfo);
 }

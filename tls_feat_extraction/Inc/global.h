@@ -7,6 +7,7 @@ struct HandlePacketData {
     std::map<FlowKey, Flow*>* flows;
     std::vector<HttpRequest>* WebRequest;
     std::vector<HttpResponse>* WebResponse;
+    std::vector<FlowFeature>* flowFeatureVector;
     std::vector<SinglePacketInfo>* singlePacketInfoVector;
     std::vector<ProtocolInfo>* protocolInfoVector;
     std::vector<PacketsFeature>* packetsFeatureVector;
@@ -16,3 +17,4 @@ struct HandlePacketData {
 };
 
 extern HandlePacketData data;
+static int app_label = 1; // 第一次初始化为1，之后便不再重新初始化
