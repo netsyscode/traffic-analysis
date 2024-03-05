@@ -471,23 +471,28 @@ double calculateStandardVariance(std::vector<double>& vec) {
 
 // 计算偏度
 double calculateSkewness(const std::vector<double>& packets_size) {
-    if (packets_size.size() < 3) {
+    if (packets_size.size() < 3 ) {
         // 数据量太少，无法计算偏度
         return 0.0;
     }
     double mean = std::accumulate(packets_size.begin(), packets_size.end(), 0.0) / packets_size.size();
-    
+
     double variance = 0.0;
     for (double value : packets_size) {
         variance += (value - mean) * (value - mean);
     }
     variance /= packets_size.size();
     double stdDev = std::sqrt(variance);
+
     double skewness = 0.0;
     for (double value : packets_size) {
         skewness += std::pow((value - mean) / stdDev, 3);
     }
-    skewness *= packets_size.size() / ((packets_size.size() - 1) * (packets_size.size() - 2));
+    skewness = skewness * packets_size.size() / ((packets_size.size() - 1) * (packets_size.size() - 2));
+
+    if (std::isnan(skewness)) {
+        skewness = 0.0;
+    }
     return skewness;
 }
 
@@ -495,7 +500,7 @@ double calculateSkewness(const std::vector<double>& packets_size) {
 double calculateKurtosis(const std::vector<double>& packets_size) {
     size_t n = packets_size.size();
     if (n < 4) {
-        // 数据量太少，无法计算峰度urg_between_time
+        // 数据量太少，无法计算峰度
         return 0.0;
     }
     double mean = std::accumulate(packets_size.begin(), packets_size.end(), 0.0) / n;
@@ -510,6 +515,9 @@ double calculateKurtosis(const std::vector<double>& packets_size) {
         kurtosis += std::pow((value - mean) / stdDev, 4);
     }
     kurtosis = (kurtosis * n * (n + 1) / ((n - 1) * (n - 2) * (n - 3))) - (3 * std::pow(n - 1, 2) / ((n - 2) * (n - 3)));
+    if (std::isnan(kurtosis)) {
+        kurtosis = 0.0;
+    }
     return kurtosis;
 }
 

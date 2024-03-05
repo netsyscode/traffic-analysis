@@ -458,21 +458,21 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 	app_label++;
 
 	//向数据库中写入数据
-	try {
-		sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
+	// try {
+	// 	sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
 
-		//连接至数据库
-		auto config = readConfig("dbconfig.ini");
-		std::unique_ptr<sql::Connection> con(driver->connect(config["host"], config["user"], config["password"]));
-		con->setSchema("TrafficData");
-		insertFlowFeatureIntoMySQL(flowFeatureVector, con);
-		insertProtocolFeatureIntoMySQL(protocolInfoVector, con);
-		insertPacketFeatureIntoMySQL(singlePacketInfoVector, con);
-		insertPacketsFeatureIntoMySQL(packetsFeatureVector, con);
-		insertFlowsFeatureIntoMySQL(flowsFeature, con);
-	}catch(std::exception &e){
-		std::cerr << e.what() << std::endl;
-	}
+	// 	//连接至数据库
+	// 	auto config = readConfig("dbconfig.ini");
+	// 	std::unique_ptr<sql::Connection> con(driver->connect(config["host"], config["user"], config["password"]));
+	// 	con->setSchema("TrafficData");
+	// 	insertFlowFeatureIntoMySQL(flowFeatureVector, con);
+	// 	insertProtocolFeatureIntoMySQL(protocolInfoVector, con);
+	// 	insertPacketFeatureIntoMySQL(singlePacketInfoVector, con);
+	// 	insertPacketsFeatureIntoMySQL(packetsFeatureVector, con);
+	// 	insertFlowsFeatureIntoMySQL(flowsFeature, con);
+	// }catch(std::exception &e){
+	// 	std::cerr << e.what() << std::endl;
+	// }
 
 	// SVMPredictor predictor(modelPath, 1.0/24.0);
  	// std::cout << "--------------------------------------------------------" << std::endl;
