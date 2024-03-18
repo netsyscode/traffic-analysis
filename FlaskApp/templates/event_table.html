@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>异常事件详情</title>
+  <link rel="stylesheet" href="./css/layui.css" media="all">
+</head>
+<body>
+ 
+<table id="demo" lay-filter="test"></table>
+ 
+<script src="./js/layui.js"></script>
+<script>
+layui.use('table', function(){
+  var table = layui.table;
+  
+  //第一个实例
+  table.render({
+    elem: '#demo'
+    ,height: 900
+    ,url: './js/event.js' //数据接口
+    ,page: true //开启分页
+    ,cols: [[ //表头
+      {field: 'eventId', title: '事件ID', width:250, sort: true, fixed: 'left'}
+      ,{field: 'time', title: '时间', width:300, sort: true}
+      ,{field: 'id', title: '流ID', width:150, sort: true}
+      ,{field: 'srcIp', title: '源IP', width:300} 
+      ,{field: 'srcPort', title: '源端口', width: 200}
+      ,{field: 'dstIp', title: '目的IP', width: 300}
+      ,{field: 'dstPort', title: '目的端口', width: 200}
+      ,{field: 'type', title: '事件类型', width: 250, sort: true, align: 'center'}
+    ]]
+  });
+});
+</script>
+</body>
+</html>

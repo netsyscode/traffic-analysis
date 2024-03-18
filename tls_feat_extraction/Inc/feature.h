@@ -10,6 +10,7 @@ struct FlowFeature
 {
 	TLSFingerprint* tlsFingerprint = nullptr;
 	int app_label = 0;
+	std::string start_timestamp = "";
 	std::string srcIP, dstIP;
 	uint16_t srcPort = 0, dstPort = 0;
 	std::string startts = "0";			

@@ -9,7 +9,7 @@ void Flow::terminate(bool download_flag)
 {
     // 包间特征
     PacketsFeature packetsFeature;
-    packetsFeature.app_label = app_label;
+    packetsFeature.app_label = stoi(app_label);
     
     packetsFeature.max_packet_size = max_packet_size;
     packetsFeature.min_packet_size = min_packet_size;
@@ -120,7 +120,7 @@ void Flow::terminate(bool download_flag)
         }
     }
 
-    flowFeature.app_label = app_label;
+    flowFeature.app_label = stoi(app_label);
     flowFeature.startts = nanosecondsToDatetime(start_timestamp);
     flowFeature.srcIP = flowKey.srcIP.toString();
     flowFeature.dstIP = flowKey.dstIP.toString();

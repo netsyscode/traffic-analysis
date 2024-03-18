@@ -272,7 +272,7 @@ void Flow::updateFeature(RawPacket* pkt) {
 	}
 
 	ProtocolInfo protocolInfo;
-	protocolInfo.app_label = app_label;
+	protocolInfo.app_label = stoi(app_label);
 	pcpp::Packet parsedPacket(pkt);
 	pcpp::TcpLayer* tcpLayer = parsedPacket.getLayerOfType<pcpp::TcpLayer>();
 
@@ -319,6 +319,7 @@ void Flow::updateFeature(RawPacket* pkt) {
 			last_urg = latest_timestamp;
 		}
 
+		flowFeature.start_timestamp = nanosecondsToDatetime(start_timestamp);
 		flowFeature.count_of_syn_packets += protocolInfo.syn_flag;
 		flowFeature.count_of_fin_packets += protocolInfo.fin_flag;
 		flowFeature.count_of_rst_packets += protocolInfo.rst_flag;
@@ -438,8 +439,7 @@ void Flow::updateFeature(RawPacket* pkt) {
 
 			auto field = httpRequestLayer->getFieldByName("PCPP_HTTP_HOST_FIELD");//encrypted?
 			webrequest.host = (field != nullptr) ? field->getFieldValue() : "";
-			if(field != nullptr) std::cout << "host : " << webrequest.host << std::endl;
-
+		
 			field = httpRequestLayer->getFieldByName("PCPP_HTTP_CONNECTION_FIELD");
 			webrequest.connection = (field != nullptr) ? field->getFieldValue() : "";
 
@@ -492,7 +492,7 @@ void Flow::updateFeature(RawPacket* pkt) {
 					webrequest.is_Https = false; // 未找到SSL/TLS握手
 				}
 			}
-			data.WebRequest->push_back(webrequest);
+			data.WebRequestVector->push_back(webrequest);
         }
 
 		// 统计与HTTP相应相关的特征
@@ -514,7 +514,7 @@ void Flow::updateFeature(RawPacket* pkt) {
 				else if(field == "Server")
 					webresponse.server = hdr->getFieldValue();
             }
-			data.WebResponse->push_back(webresponse);
+			data.WebResponseVector->push_back(webresponse);
         }
 
 	}
@@ -677,7 +677,7 @@ void Flow::updateFeature(RawPacket* pkt) {
 				protocolInfo.sip_data = sipMatches[1];
 			}
 		}
-		singlePacketInfo.app_label = app_label;
+		singlePacketInfo.app_label = stoi(app_label);
 		data.protocolInfoVector->push_back(protocolInfo);
 		data.singlePacketInfoVector->push_back(singlePacketInfo);
 }

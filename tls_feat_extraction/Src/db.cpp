@@ -265,9 +265,8 @@ void insertFlowsFeatureIntoMySQL(const FlowsFeature& flowsFeature, std::unique_p
         payload_entropy_10, payload_entropy_25, payload_entropy_50, payload_entropy_75, payload_entropy_90) VALUES (?, ?, ?,\
         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
 
-        //只插入一行
-        pstmt->setInt(1, flowsFeature.max_active_flow_count);
-        pstmt->setInt(2, flowsFeature.app_label);
+        pstmt->setInt(1, flowsFeature.app_label);
+        pstmt->setInt(2, flowsFeature.max_active_flow_count);
         // 从第三列开始
         int index = 3; 
         for (const auto& distribution : {flowsFeature.flow_duration_distribution, flowsFeature.packet_count_distribution, flowsFeature.byte_size_distribution, 
@@ -292,6 +291,7 @@ void insertFlowFeatureIntoMySQL(const std::vector<FlowFeature>& features, std::u
             CREATE TABLE IF NOT EXISTS FlowFeatures (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 app_label INT,
+                start_timestamp VARCHAR(255),
                 srcIP VARCHAR(255),
                 dstIP VARCHAR(255),
                 srcPort SMALLINT UNSIGNED,
@@ -342,7 +342,7 @@ void insertFlowFeatureIntoMySQL(const std::vector<FlowFeature>& features, std::u
         stmt->execute(createTableSQL);
 
         std::unique_ptr<sql::PreparedStatement> pstmt;
-        pstmt.reset(con->prepareStatement("INSERT INTO FlowFeatures (app_label, srcIP, dstIP, srcPort, dstPort, startts, pktcnt, "
+        pstmt.reset(con->prepareStatement("INSERT INTO FlowFeatures (app_label, start_timestamp, srcIP, dstIP, srcPort, dstPort, startts, pktcnt, "
                                           "client_TLS_version, client_cipher_suite, client_extensions, client_supported_groups, client_ecformat, "
                                           "server_TLS_version, server_cipher_suite, server_extensions, pktlen, itvl, bw, dur, "
                                           "ave_pkt_size_over_1000, ave_pkt_size_under_300, udp_nopayload_rate, ret_rate, ave_rtt, "
@@ -351,11 +351,12 @@ void insertFlowFeatureIntoMySQL(const std::vector<FlowFeature>& features, std::u
                                           "max_size_of_packet, min_size_of_packet, end_to_end_latency, avg_window_size, avg_ttl, avg_payload_size, "
                                           "count_of_ret_packets, count_of_syn_packets, count_of_fin_packets, count_of_rst_packets, count_of_ack_packets, count_of_psh_packets, count_of_urg_packets, "
                                           "entropy_of_payload) "
-                                          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
+                                          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
 
         for(const auto& feature: features) {
             int i = 1;
             pstmt->setInt(i++, feature.app_label);
+            pstmt->setString(i++, feature.start_timestamp);
             pstmt->setString(i++, feature.srcIP);
             pstmt->setString(i++, feature.dstIP);
             pstmt->setUInt(i++, feature.srcPort);
@@ -406,6 +407,73 @@ void insertFlowFeatureIntoMySQL(const std::vector<FlowFeature>& features, std::u
         std::cout << "Insert FlowFeatures Into MySQL Successfully!\n";
     } catch (sql::SQLException& e) {
         std::cerr << "SQLException in insertFlowFeatureIntoMySQL():" << std::endl
+                  << "SQLState: " << e.getSQLState() << std::endl
+                  << "Error Code: " << e.getErrorCode() << std::endl
+                  << "Message: " << e.what() << std::endl;
+    }
+}
+
+void insertHttpRequestIntoMySQL(const std::vector<HttpRequest>& requests, std::unique_ptr<sql::Connection>& con) {
+    try {
+        std::unique_ptr<sql::Statement> stmt(con->createStatement());
+        // Create table for HttpRequest if it doesn't exist
+        stmt->execute("CREATE TABLE IF NOT EXISTS HttpRequestFeatures ("
+                      "id INT AUTO_INCREMENT PRIMARY KEY,"
+                      "method VARCHAR(10),"
+                      "url TEXT,"
+                      "httpversion VARCHAR(10),"
+                      "host VARCHAR(255),"
+                      "connection VARCHAR(255),"
+                      "user_agent TEXT,"
+                      "cookies TEXT,"
+                      "referer TEXT,"
+                      "content_length VARCHAR(255),"
+                      "accept TEXT,"
+                      "accept_encoding TEXT,"
+                      "content_encoding VARCHAR(255),"
+                      "content_type VARCHAR(255),"
+                      "server VARCHAR(255),"
+                      "accept_language TEXT,"
+                      "is_Ajax BOOLEAN,"
+                      "is_Websocket BOOLEAN,"
+                      "has_static_resource BOOLEAN,"
+                      "is_Http BOOLEAN,"
+                      "is_Https BOOLEAN)");
+
+        // Prepare the insert statement
+        std::unique_ptr<sql::PreparedStatement> pstmt;
+        pstmt.reset(con->prepareStatement("INSERT INTO HttpRequestFeatures (method, url, httpversion, host, connection, user_agent, cookies, referer, content_length, accept, accept_encoding, content_encoding, content_type, server, accept_language, is_Ajax, is_Websocket, has_static_resource, is_Http, is_Https) "
+                                          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
+
+        // Iterate over each HttpRequest object and insert it into the database
+        for (const auto& request : requests) {
+            int i = 1;
+            pstmt->setString(i++, request.method);
+            pstmt->setString(i++, request.url);
+            pstmt->setString(i++, request.httpversion);
+            pstmt->setString(i++, request.host);
+            pstmt->setString(i++, request.connection);
+            pstmt->setString(i++, request.user_agent);
+            pstmt->setString(i++, request.cookies);
+            pstmt->setString(i++, request.referer);
+            pstmt->setString(i++, request.content_length);
+            pstmt->setString(i++, request.accept);
+            pstmt->setString(i++, request.accept_encoding);
+            pstmt->setString(i++, request.content_encoding);
+            pstmt->setString(i++, request.content_type);
+            pstmt->setString(i++, request.server);
+            pstmt->setString(i++, request.accept_language);
+            pstmt->setBoolean(i++, request.is_Ajax);
+            pstmt->setBoolean(i++, request.is_Websocket);
+            pstmt->setBoolean(i++, request.has_static_resource);
+            pstmt->setBoolean(i++, request.is_Http);
+            pstmt->setBoolean(i++, request.is_Https);
+
+            pstmt->executeUpdate();
+        }
+        std::cout << "Insert HttpRequestFeatures Into MySQL Successfully!\n";
+    } catch (sql::SQLException& e) {
+        std::cerr << "SQLException in insertHttpRequestIntoMySQL():" << std::endl
                   << "SQLState: " << e.getSQLState() << std::endl
                   << "Error Code: " << e.getErrorCode() << std::endl
                   << "Message: " << e.what() << std::endl;
