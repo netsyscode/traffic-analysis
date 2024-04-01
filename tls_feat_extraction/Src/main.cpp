@@ -106,6 +106,11 @@ void printCommonTLSFingerprints(const std::map<std::string, uint64_t>& tlsFinger
 }
 
 // 处理每一个包
+/**
+ * @brief 处理每一个数据包
+ * @param rawPacket 原始数据包
+ * @param data 包含所有流的信息
+ */
 void handlePacket(RawPacket* rawPacket, const HandlePacketData* data)
 {
 	Packet* parsedPacket;
@@ -199,6 +204,10 @@ void handlePacket(RawPacket* rawPacket, const HandlePacketData* data)
 }
 
 // 所有数据已存于流中
+/**
+ * @brief 计算流的特征
+ * @param data 包含所有流的信息
+ */
 void calculateFlowFeature(const HandlePacketData* data)
 {
 	if (data->flows->size() >= 1) {
@@ -224,6 +233,11 @@ void calculateFlowFeature(const HandlePacketData* data)
 	}
 }
 
+/**
+ * @brief 将流进行分类
+ * @param data 包含所有流的信息
+ * @param model SVM分类器
+ */
 void classficationFlows(const HandlePacketData* data, SVMPredictor* model)
 {
 	auto flows = *(data->flows);
@@ -266,7 +280,11 @@ void classficationFlows(const HandlePacketData* data, SVMPredictor* model)
 }
 
 /**
- * Extract TLS fingerprints from a pcap/pcapng file
+ * @brief 从pcap文件中提取TLS指纹
+ * @param inputPcapFileName 输入pcap文件的文件名
+ * @param outputFileName 输出文件的文件名
+ * @param bpfFilter BPF过滤器
+ * @param modelPath 分类模型的路径
  */
 void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::string& outputFileName, const std::string& bpfFilter, std::string& modelPath)
 {

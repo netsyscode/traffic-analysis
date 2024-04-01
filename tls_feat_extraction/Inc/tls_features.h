@@ -117,13 +117,40 @@ struct SessionKey {
 };
 
 
-
+/**
+ * @brief 生成SessionKey
+ * @param packet 数据包
+ * @param isFromClient 指示会话的方向
+ * @return SessionKey结构体
+*/
 SessionKey generateSessionKey(Packet *packet, bool isFromClient);
 
+/**
+ * @brief 生成客户端的TLSHello指纹
+ * @param clientHelloMsg TLS握手消息
+ * @param isFromClient 指示会话的方向
+ * @return 客户端握手指纹
+*/
 ClientHelloFingerprint generateClientHelloFingerprint(SSLClientHelloMessage* clientHelloMsg);
 
+/**
+ * @brief 生成服务器端的TLSHello指纹
+ * @param clientHelloMsg TLS握手消息
+ * @param isFromClient 指示会话的方向
+ * @return 服务器端握手指纹
+*/
 ServerHelloFingerprint generateServerHelloFingerprint(SSLServerHelloMessage* serverHelloMsg);
 
+/**
+ * @brief 得到一个包的源端口和目的端口
+ * @param packet 指向pcpp::Packet类型变量的指针
+ * @return 源端口和目的端口对
+ */
 std::pair<IPAddress, IPAddress> getIPs(const Packet* packet);
 
+/**
+ * @brief 获取包的端口号
+ * @param packet 指向pcpp::Packet类型变量的指针
+ * @return 源端口号和目的端口号的pair
+ */
 std::pair<uint16_t, uint16_t> getTcpPorts(const Packet* packet);

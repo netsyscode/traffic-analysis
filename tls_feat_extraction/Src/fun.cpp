@@ -4,7 +4,10 @@
 #include "global.h"
 
 
-// 一条流的特征
+/**
+ * @brief 在单条流结束时计算相关特征
+ * @param download_flag 该条流是否是下载流
+ */
 void Flow::terminate(bool download_flag)
 {
     // 包间特征
@@ -184,10 +187,15 @@ Flow::Flow(FlowKey flowKey)//构造函数
     ret = 0;
 }
 
+/**
+ * @brief 生成TCP连接信息
+ * @return 形如1.1.1.1:1->2.2.2.2:2的字符串
+ */
 std::string FlowKey::toString() const
 {	
 	return srcIP.toString() +":"+ std::to_string(srcPort)+" -> " + dstIP.toString() +':'+ std::to_string(dstPort);
 }
+
 
 bool FlowKey::operator<(const FlowKey& e) const
 {	
@@ -209,7 +217,7 @@ bool FlowKey::operator==(const FlowKey& e) const
 		(this->srcPort == e.srcPort) && (this->dstPort == e.dstPort);
 }
 
-// 返回包的源IP和目的IP
+
 std::pair<IPAddress, IPAddress> getIPs(const Packet* packet)
 {
 	IPAddress srcIP, dstIP;
@@ -223,7 +231,6 @@ std::pair<IPAddress, IPAddress> getIPs(const Packet* packet)
 }
 
 
-// 返回包的源端口和目的端口
 std::pair<uint16_t, uint16_t> getTcpPorts(const Packet* packet)
 {
 	uint16_t srcPort = 0, dstPort = 0;
@@ -237,7 +244,11 @@ std::pair<uint16_t, uint16_t> getTcpPorts(const Packet* packet)
 	return std::pair<uint16_t, uint16_t>(srcPort, dstPort);
 }
 
-// 生成flowKey
+/**
+ * @brief 生成一个Flowkey
+ * @param pkt 指向pcpp::Packet类型变量的指针
+ * @return 指向所生成Flowkey的指针
+ */
 FlowKey* generateFlowKey(const Packet* pkt)
 {
 	FlowKey* flowKey = new FlowKey();
@@ -264,7 +275,12 @@ FlowKey* generateFlowKey(const Packet* pkt)
 	return flowKey;
 }
 
-// 填充会话key
+/**
+ * @brief 用Flowkey填充SessionKey
+ * @param sessionKey 所要填充的sessionKey
+ * @param flowKey 填充所需要的flowKey
+ * @param fromClient 是从客户端而来的流还是反向的
+ */
 void fillSessionKeyWithFlowKey(SessionKey& sessionKey, const FlowKey& flowKey, bool fromClient)
 {
 	if (fromClient)
@@ -283,7 +299,11 @@ void fillSessionKeyWithFlowKey(SessionKey& sessionKey, const FlowKey& flowKey, b
 	}
 }
 
-// 将时间戳转换为形如2000-00-00:000000的时间
+/**
+ * @brief 时间戳形式转换
+ * @param nanoseconds 以纳秒为单位待转化的时间戳
+ * @return 形如2000-00-00:000000的时间
+ */
 std::string nanosecondsToDatetime(LL nanoseconds) {
     auto seconds = nanoseconds / 1000000000;
     auto nanosec = nanoseconds % 1000000000;
@@ -298,7 +318,12 @@ std::string nanosecondsToDatetime(LL nanoseconds) {
     return ss.str();
 }
 
-// 计算分位数近似拟合数据分布
+/**
+ * @brief 计算分位数近似拟合数据分布
+ * @param a double类型的vector
+ * @return 一个vector，包含10、25、50、75和90分位数
+ */
+
 std::vector<double> calculatePercentiles(const std::vector<double>& a) {
     if (a.empty()) return {};
     std::vector<double> sorted_a = a; // 复制原向量
@@ -326,7 +351,12 @@ std::vector<double> calculatePercentiles(const std::vector<double>& a) {
     return percentiles;
 }
 
-// 根据fielName提取data中的数据
+/**
+ * @brief 根据fielName提取data中的数据
+ * @param data 存储了所有流的信息
+ * @param fieldName[] 头部的一个域的名称
+ * @return 一个vector，包含从data中提取所指定域的数据
+ */
 std::vector<double> getFlowsValues(const HandlePacketData* data, const char fieldName[]) {
     std::vector<double> values;
 	// 提取流的持续时间
@@ -373,7 +403,11 @@ std::vector<double> getFlowsValues(const HandlePacketData* data, const char fiel
     return values;
 }
 
-// 统计一条流的源端口和目的端口数
+/**
+ * @brief 统计一条流的源端口和目的端口数
+ * @param data 存储了所有流的信息
+ * @return 一个pair,pair里面是port->count的字典
+ */
 std::pair<std::map<u_int16_t, int>, std::map<u_int16_t, int>> countFlowsByPorts(const HandlePacketData* data) {
     std::map<u_int16_t, int> srcPortCounts, dstPortCounts;
     for (const auto& flowPair : *data->flows) {
@@ -395,7 +429,11 @@ std::pair<std::map<u_int16_t, int>, std::map<u_int16_t, int>> countFlowsByPorts(
     return {srcPortCounts, dstPortCounts};
 }
 
-// 统计流的源IP和目的IP数
+/**
+ * @brief 统计流的源IP和目的IP数
+ * @param data 存储了所有流的信息
+ * @return 一个pair,pair里面是IP->count的字典
+ */
 std::pair<std::map<std::string, int>, std::map<std::string, int>> countFlowsByIP(const HandlePacketData* data) {
     std::map<std::string, int> srcIPCounts, dstIPCounts;
     for (const auto& pair : *data->flows) {
@@ -408,7 +446,11 @@ std::pair<std::map<std::string, int>, std::map<std::string, int>> countFlowsByIP
     return {srcIPCounts, dstIPCounts};
 }
 
-// 判断是否是公网IP
+/**
+ * @brief 判断是否是公网IP
+ * @param ipAddress 一个点分十进制的IP字符串
+ * @return 是否是公网IP
+ */
 bool isPrivateIP(const std::string& ipAddress) {
     std::vector<int> nums;
     std::stringstream ss(ipAddress);
@@ -469,7 +511,11 @@ double calculateStandardVariance(std::vector<double>& vec) {
     return sqrt(variance / vec.size());
 }
 
-// 计算偏度
+/**
+ * @brief 计算偏度
+ * @param packets_size 存储包长的vector
+ * @return 包长的偏度
+ */
 double calculateSkewness(const std::vector<double>& packets_size) {
     if (packets_size.size() < 3 ) {
         // 数据量太少，无法计算偏度
@@ -496,7 +542,11 @@ double calculateSkewness(const std::vector<double>& packets_size) {
     return skewness;
 }
 
-// 计算峰度
+/**
+ * @brief 计算峰度
+ * @param packets_size 存储包长的vector
+ * @return 包长的峰度
+ */
 double calculateKurtosis(const std::vector<double>& packets_size) {
     size_t n = packets_size.size();
     if (n < 4) {
@@ -521,7 +571,13 @@ double calculateKurtosis(const std::vector<double>& packets_size) {
     return kurtosis;
 }
 
-// 提取SPS信息
+/**
+ * @brief 提取SPS信息
+ * @param rtp_payload RTP负载的起始字节
+ * @param  payload_length 负载长度
+ * @param sps_length SPS的长度
+ * @return SPS数据起始字节的位置
+ */
 uint8_t* extract_sps_from_rtp(uint8_t* rtp_payload, size_t payload_length, size_t* sps_length) {
     // 确保提供了有效的参数
     if (!rtp_payload || payload_length == 0 || !sps_length) {
@@ -562,7 +618,11 @@ uint8_t* extract_sps_from_rtp(uint8_t* rtp_payload, size_t payload_length, size_
     return NULL;
 }
 
-// HTTP
+/**
+ * @brief 检查HTTP头部字段
+ * @param packet 指向pcpp::Packet类型变量的指针
+ * @return 是否含有Range字段
+ */
 bool checkForRangeHeader(const pcpp::Packet& packet) {
     auto* httpLayer = packet.getLayerOfType<pcpp::HttpRequestLayer>();
     if (httpLayer != nullptr) {
@@ -582,7 +642,11 @@ bool checkForRangeHeader(const pcpp::Packet& packet) {
     return false;
 }
 
-// 从ini配置文件中读取数据库配置
+/**
+ * @brief 从ini配置文件中读取数据库配置
+ * @param configFile 数据库配置文件
+ * @return 各项配置的字典
+ */
 std::map<std::string, std::string> readConfig(const std::string& configFile) {
     std::map<std::string, std::string> config;
     std::ifstream file(configFile);

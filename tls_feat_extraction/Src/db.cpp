@@ -8,7 +8,12 @@
 #include <ctime>
 #include "feature.h"
 
-void insertProtocolFeatureIntoMySQL(const std::vector<ProtocolInfo>& data, std::unique_ptr<sql::Connection>& con) {
+/**
+ * @brief 将协议特征写入数据库
+ * @param features 包含协议特征的vector
+ * @param con 至Mysql数据库的连接
+ */
+void insertProtocolFeatureIntoMySQL(const std::vector<ProtocolInfo>& features, std::unique_ptr<sql::Connection>& con) {
     try {
         std::unique_ptr<sql::Statement> stmt(con->createStatement());
         stmt->execute("CREATE TABLE IF NOT EXISTS ProtocolFeatures ("
@@ -56,7 +61,7 @@ void insertProtocolFeatureIntoMySQL(const std::vector<ProtocolInfo>& data, std::
                                           "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
 
         // Bind data to the prepared statement
-		for (const auto& info : data) {
+		for (const auto& info : features) {
             int i = 1;
             pstmt->setInt(i++, info.app_label);
 			pstmt->setString(i++, info.mac_source);
@@ -101,7 +106,12 @@ void insertProtocolFeatureIntoMySQL(const std::vector<ProtocolInfo>& data, std::
     }
 }
 
-void insertPacketFeatureIntoMySQL(const std::vector<SinglePacketInfo>& data, std::unique_ptr<sql::Connection>& con) {
+/**
+ * @brief 将包特征写入数据库
+ * @param features 包含单个包特征的vector
+ * @param con 至Mysql数据库的连接
+ */
+void insertPacketFeatureIntoMySQL(const std::vector<SinglePacketInfo>& features, std::unique_ptr<sql::Connection>& con) {
     try {
         std::unique_ptr<sql::Statement> stmt(con->createStatement());
         stmt->execute("CREATE TABLE IF NOT EXISTS PacketFeatures ("
@@ -118,7 +128,7 @@ void insertPacketFeatureIntoMySQL(const std::vector<SinglePacketInfo>& data, std
                                           "VALUES (?, ?, ?, ?, ?)"));
 
         // Iterate over each SinglePacketInfo object and insert it into the database
-        for (const auto& packet : data) {
+        for (const auto& packet : features) {
             int i = 1;
             pstmt->setInt(i++, packet.app_label);
             pstmt->setUInt64(i++, packet.payload_size); // Using setUInt64 for size_t
@@ -137,6 +147,12 @@ void insertPacketFeatureIntoMySQL(const std::vector<SinglePacketInfo>& data, std
     }
 }
 
+
+/**
+ * @brief 将包间特征写入数据库
+ * @param features 包含包间特征o的vector
+ * @param con 至Mysql数据库的连接
+ */
 void insertPacketsFeatureIntoMySQL(const std::vector<PacketsFeature>& features, std::unique_ptr<sql::Connection>& con) {
     try {
 
@@ -205,6 +221,11 @@ void insertPacketsFeatureIntoMySQL(const std::vector<PacketsFeature>& features, 
     }
 }
 
+/**
+ * @brief 将流间特征写入数据库
+ * @param flowsFeature 包含流间特征o的vector
+ * @param con 至Mysql数据库的连接
+ */
 void insertFlowsFeatureIntoMySQL(const FlowsFeature& flowsFeature, std::unique_ptr<sql::Connection>& con) {
     try { 
         std::unique_ptr<sql::Statement> stmt(con->createStatement());
@@ -285,6 +306,11 @@ void insertFlowsFeatureIntoMySQL(const FlowsFeature& flowsFeature, std::unique_p
     }
 }
 
+/**
+ * @brief 将单条流特征写入数据库
+ * @param features 包含单条流特征的vector
+ * @param con 至Mysql数据库的连接
+ */
 void insertFlowFeatureIntoMySQL(const std::vector<FlowFeature>& features, std::unique_ptr<sql::Connection>& con) {
     try {
         const char* createTableSQL = R"SQL(
@@ -413,6 +439,11 @@ void insertFlowFeatureIntoMySQL(const std::vector<FlowFeature>& features, std::u
     }
 }
 
+/**
+ * @brief 将HTTP请求特征写入数据库
+ * @param requests 包含HTTP请求的vector
+ * @param con 至Mysql数据库的连接
+ */
 void insertHttpRequestIntoMySQL(const std::vector<HttpRequest>& requests, std::unique_ptr<sql::Connection>& con) {
     try {
         std::unique_ptr<sql::Statement> stmt(con->createStatement());

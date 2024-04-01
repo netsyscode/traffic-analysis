@@ -20,8 +20,11 @@ uint8_t sps_parser_base64_table[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmno
 
 int countActiveFlowsEveryFiveSeconds(const HandlePacketData* data);
 
-
-// Base64解码函数
+/**
+ * @brief Base64解码函数
+ * @param buffer sps数据开始的位置
+ * @return 解码后的数据长度
+ */
 size_t sps_parser_base64_decode(char *buffer) {
 	uint8_t dtable[256], block[4], tmp, pad = 0;
 	size_t i, count = 0, pos = 0, len = strlen(buffer);
@@ -66,7 +69,12 @@ size_t sps_parser_base64_decode(char *buffer) {
 	return pos;// 返回解码后的数据长度
 }
 
-// 从buffer中读取指定位数的bits，并更新offset
+/**
+ * @brief 从buffer中读取指定位数的bits，并更新offset
+ * @param buffer 缓冲区位置
+ * @param count 读取的指定位数
+ * @return 读取之后的位置
+ */
 uint32_t sps_parser_read_bits(char *buffer, uint32_t count) {
 	uint32_t result = 0;
 	uint8_t index = (sps_parser_offset / 8);
@@ -206,7 +214,10 @@ uint32_t sps_parser(char *buffer) {
 	);
 }
 
-// 收到一个包，更新相关的特征
+/**
+ * @brief 收到一个包后更新相关的特征
+ * @param pkt 原始数据包
+ */
 void Flow::addPacket(RawPacket* pkt)
 {
 	packets.push_back(pkt);
@@ -227,7 +238,11 @@ double calculateEntropy(const std::map<uint8_t, int>& frequencyMap) {
     return entropy;
 }
 
-//更新相关特征
+
+/**
+ * @brief 具体执行更新相关特征
+ * @param pkt 每一个原始网络包
+ */
 void Flow::updateFeature(RawPacket* pkt) {
 	int pktLen = pkt->getFrameLength();
 	SinglePacketInfo singlePacketInfo;

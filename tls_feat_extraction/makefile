@@ -49,3 +49,8 @@ clean:
 	@$(RM) -rf ./Obj/*
 	@$(RM) -rf ./Bin/*
 	@echo Clean finished: $(CUR_TARGET)
+
+# 附加目标，用于执行gprof分析
+profile:
+	./$(TARGET)
+	gprof $(TARGET) gmon.out > analysis.txt
