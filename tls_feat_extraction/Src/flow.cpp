@@ -19,7 +19,7 @@ uint32_t sps_parser_offset;
 uint8_t sps_parser_base64_table[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 int countActiveFlowsEveryFiveSeconds(const HandlePacketData* data);
-
+std::string findApplication(const std::string& filePath, const FlowKey& flowKey);
 /**
  * @brief Base64解码函数
  * @param buffer sps数据开始的位置
@@ -287,7 +287,7 @@ void Flow::updateFeature(RawPacket* pkt) {
 	}
 
 	ProtocolInfo protocolInfo;
-	protocolInfo.app_label = stoi(app_label);
+	// protocolInfo.app_label = app_label;
 	pcpp::Packet parsedPacket(pkt);
 	pcpp::TcpLayer* tcpLayer = parsedPacket.getLayerOfType<pcpp::TcpLayer>();
 
@@ -692,7 +692,7 @@ void Flow::updateFeature(RawPacket* pkt) {
 				protocolInfo.sip_data = sipMatches[1];
 			}
 		}
-		singlePacketInfo.app_label = stoi(app_label);
+		// singlePacketInfo.app_label = app_label;
 		data.protocolInfoVector->push_back(protocolInfo);
 		data.singlePacketInfoVector->push_back(singlePacketInfo);
 }

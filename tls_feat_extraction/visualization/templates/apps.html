@@ -1,0 +1,122 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>可视化分析系统</title>
+  <script type="text/javascript" src="../static/js/jquery.js"></script>
+  <link rel="stylesheet" href="../static/css/comon0.css">
+</head>
+
+<body>
+  <div class="loading">
+    <div class="loadbox"> <img src="../static/images/loading.gif"> 页面加载中... </div>
+  </div>
+
+  <div class="content">
+    <div class="header">
+      <div class="header_l">
+        <ul>
+          <li class="">
+            <a href="/index">
+              <img src="../static/images/header-3.png" alt="">
+              <span>监控大屏</span>
+            </a>
+          </li>
+          
+          <li class="">
+            <a href="/traffic">
+              <span>流量感知</span>
+            </a>
+            <!-- 下拉菜单内容 -->
+            <ul class="dropdown-content">
+              <li><a href="/traffic">流量概要</a></li>
+              <li><a href="/traffic">协议分析</a></li>
+            </ul>
+          </li>
+          <li class="">
+            <a href="/npm">
+              <span>网络感知</span>
+            </a>
+            <!-- 下拉菜单内容 -->
+            <ul class="dropdown-content">
+              <li><a href="/npm">性能概要</a></li>
+              <li><a href="/npm">连接性能</a></li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+      <div class="header_m">
+        <h1>应用态势感知分析系统</h1>
+      </div>
+      <div class="header_r">
+        <ul>
+          <li class="sel_li">
+            <a href="">
+              <span>应用感知</span>
+            </a>
+            <ul class="dropdown-content">
+              <li><a href="">下载类</a></li>
+              <li><a href="">Web类</a></li>
+              <li ><a href="">影音类</a></li>
+              <li></li>
+            </ul>
+          </li>
+          <li class="">
+            <a href="">
+              <span>安全感知</span>
+            </a>
+          </li>
+          <li>
+            <a  id="exit">
+              <img src="../static/images/header-1.png" alt="">
+              <span>退出</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="mainbox">
+    <ul class="clearfix">
+      <li>
+        <div class="boxall" style="height: calc(145% - .15rem);width: calc(171%);">
+          <div class="alltitle">应用类别</div>
+          <div class="boxnav" id="pie1"></div>
+          <div class="boxfoot"></div>
+        </div>
+      </li>
+
+      <li>
+        <div class="boxall" style="height: calc(145% - .15rem);width: calc(127%);margin-left: calc(50%);">
+          <div class="alltitle">具体应用</div>
+          <div class="boxnav" id="pie2"></div>
+          <div class="boxfoot"></div>
+        </div>
+      </li>
+    </ul>
+  </div>
+  <script type="text/javascript" src="../static/js/apps.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@x.x.x/dist/echarts.min.js"></script>
+  <script src="../static/js/jquery.liMarquee.js"></script>
+  <script>
+    document.getElementById('exit').addEventListener('click', function() {
+        window.location.href = 'https://www.google.com';
+    });
+</script>
+  <script>
+    $(function () {
+      $('.wrap,.adduser').liMarquee({
+        direction: 'up',//身上滚动 
+        runshort: false,//内容不足时不滚动
+        scrollamount: 20//速度
+      });
+    });
+
+  </script>
+
+</body>
+
+</html>

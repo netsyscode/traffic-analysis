@@ -1,0 +1,202 @@
+﻿<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>可视化分析系统</title>
+  <script type="text/javascript" src="../static/js/jquery.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@x.x.x/dist/echarts.min.js"></script>
+  <link rel="stylesheet" href="../static/css/comon0.css">
+</head>
+
+<body>
+  <div class="loading">
+    <div class="loadbox"> <img src="../static/images/loading.gif"> 页面加载中... </div>
+  </div>
+
+  <div class="content">
+    <div class="header">
+      <div class="header_l">
+        <ul>
+          <li class="sel_li">
+            <a href="">
+              <img src="../static/images/header-3.png" alt="">
+              <span>监控大屏</span>
+            </a>
+          </li>
+          
+          <li class="">
+            <a href="/traffic">
+              <span>流量感知</span>
+            </a>
+            <!-- 下拉菜单内容 -->
+            <ul class="dropdown-content">
+              <li><a href="/traffic">流量概要</a></li>
+              <li><a href="/traffic">协议分析</a></li>
+            </ul>
+          </li>
+          <li class="">
+            <a href="/npm">
+              <span>网络感知</span>
+            </a>
+            <!-- 下拉菜单内容 -->
+            <ul class="dropdown-content">
+              <li><a href="/npm">性能概要</a></li>
+              <li><a href="/connection">连接性能</a></li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+      <div class="header_m">
+        <h1>应用态势感知分析系统</h1>
+      </div>
+      <div class="header_r">
+        <ul>
+          <li class="">
+            <a href="/apps">
+              <span>应用感知</span>
+            </a>
+            <ul class="dropdown-content">
+              <li><a href="/apps">下载类</a></li>
+              <li><a href="/apps">Web类</a></li>
+              <li ><a href="/apps">影音类</a></li>
+              <li></li>
+            </ul>
+          </li>
+          <li class="">
+            <a href="">
+              <span>安全感知</span>
+            </a>
+          </li>
+          <li>
+            <a  id="exit">
+              <img src="../static/images/header-1.png" alt="">
+              <span>退出</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="mainbox">
+    <ul class="clearfix">
+      <li>
+        <div class="boxall" style="height: calc(100% - .15rem)">
+          <div class="alltitle">系统健康度展示</div>
+          <div class="allnav" id="dbj" style="height: calc(100% - .15rem)"></div>
+          <div class="boxfoot"></div>
+        </div>
+      </li>
+      <li>
+        <div style="position: relative">
+          <div class="barnav">
+            <div class="bar">
+              <div class="barbox">
+                <ul class="clearfix">
+                  <li class="pulll_left counter">1942</li>
+                  <li class="pulll_left counter">132</li>
+                  <li class="pulll_left counter">3</li>
+                </ul>
+              </div>
+              <div class="barbox2">
+                <ul class="clearfix">
+                  <li class="pulll_left">用户总数</li>
+                  <li class="pulll_left">应用数</li>
+                  <li class="pulll_left">应用类型</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mapbox">
+          <div class="map">
+            <div class="map1"><img src="../static/images/lbx.png"></div>
+            <div class="map2"><img src="../static/images/jt.png"></div>
+            <div class="map3"><img src="../static/images/map.png"></div>
+            <div class="map4" id="map_1"></div>
+          </div>
+        </div>
+      </li>
+      <li>
+        <div class="boxall" style="height: calc(100% - .15rem)">
+          <div class="alltitle">热门应用 <div class="pulll_right">
+            </div>
+          </div>
+          <div class="boxnav" id="echarts5"></div>
+          <div class="boxfoot"></div>
+        </div>
+      </li>
+    </ul>
+  </div>
+
+  <div class="mainbox2">
+    <ul class="clearfix">
+      <li>
+        <div class="boxall" style="height:110%">
+          <div class="title" style="margin-left: -0.22rem;">
+            <h2>数据总览</h2>
+            <p>
+              <span class="span_c" onclick="cl1()">近1小时</span>
+              <span class="" onclick="cl2()">近1天</span>
+              <span class="" onclick="cl3()">近7天</span>
+              <span class="" onclick="cl4()">近30天</span>
+              <span class="" onclick="cl2()">近1年</span>
+              <span class="" onclick="cl2()">今日</span>
+              <span class="" onclick="cl2()">本周</span>
+              <span class="" onclick="cl2()">本月</span>
+            </p>
+          </div>
+          <div class="boxnav" id="echart4"></div>
+          <div class="boxfoot"></div>
+        </div>
+      </li>
+      <li>
+        <div class="boxall" style="height: 110%">
+          <div class="alltitle">典型流详情
+          </div>
+          <div class="wrap boxnav">
+            <ul id="data-list">
+              <!-- 动态内容将会填充在这里 -->
+            </ul>
+          </div>
+          <div class="boxfoot"></div>
+        </div>
+      </li>
+    </ul>
+  </div> 
+
+  <script language="JavaScript" src="../static/js/index.js"></script>
+  <script type="text/javascript" src="../static/js/china.js"></script>
+  <script type="text/javascript" src="../static/js/area_echarts.js"></script>
+  <script src="../static/js/jquery.liMarquee.js"></script>
+  <script>
+    document.getElementById('exit').addEventListener('click', function() {
+        window.location.href = 'https://www.google.com';
+    });
+</script>
+
+<script>
+  window.onload = function() {
+    fetch('/get_typical_flows')
+    .then(response => response.json())
+    .then(data => {
+      const list = document.getElementById('data-list');
+      list.innerHTML = '';
+      data.forEach(item => {
+        const li = document.createElement('li');
+        li.innerHTML = `<p><span>${item.source_ip}</span><span>${item.dest_ip}</span><span>${item.source_port}</span><span>${item.dest_port}</span><span>${item.pktcnt}</span><span>${item.client_TLS_version}</span><span>${item.bw}</span></p>`;
+        list.appendChild(li);
+      });
+      $('.wrap').liMarquee({
+        direction: 'up',
+        runshort: false,
+        scrollamount: 20
+      });
+    });
+  };
+</script>
+</body>
+
+</html>

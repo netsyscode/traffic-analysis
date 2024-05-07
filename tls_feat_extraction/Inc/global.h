@@ -17,4 +17,5 @@ struct HandlePacketData {
 };
 
 extern HandlePacketData data;
-extern std::string app_label;
+// extern std::string app_label;
+extern std::map<FlowKey, std::string> flow2app;

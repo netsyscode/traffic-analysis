@@ -1,0 +1,161 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>可视化分析系统</title>
+  <script type="text/javascript" src="../static/js/jquery.js"></script>
+  <link rel="stylesheet" href="../static/css/comon0.css">
+  <link rel="stylesheet" href="../static/css/comon1.css">
+  <link rel="stylesheet" href="../static/css/button.css">
+  <link rel="stylesheet" href="../static/css/detail.css">
+</head>
+
+<body>
+  <div class="loading">
+    <div class="loadbox"> <img src="../static/images/loading.gif"> 页面加载中... </div>
+  </div>
+
+  <div class="content">
+    <div class="header">
+      <div class="header_l">
+        <ul>
+          <li class="">
+            <a href="/index">
+              <img src="../static/images/header-3.png" alt="">
+              <span>监控大屏</span>
+            </a>
+          </li>
+          
+          <li class="">
+            <a href="/traffic">
+              <span>流量感知</span>
+            </a>
+            <!-- 下拉菜单内容 -->
+            <ul class="dropdown-content">
+              <li><a href="/traffic">流量概要</a></li>
+              <li><a href="/traffic">协议分析</a></li>
+            </ul>
+          </li>
+          <li class="sel_li">
+            <a href="/npm">
+              <span>网络感知</span>
+            </a>
+            <!-- 下拉菜单内容 -->
+            <ul class="dropdown-content">
+              <li><a href="/npm">性能概要</a></li>
+              <li><a href="/npm">连接性能</a></li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+      <div class="header_m">
+        <h1>应用态势感知分析系统</h1>
+      </div>
+      <div class="header_r">
+        <ul>
+          <li class="">
+            <a href="/apps">
+              <span>应用感知</span>
+            </a>
+            <ul class="dropdown-content">
+              <li><a href="/apps">下载类</a></li>
+              <li><a href="/apps">Web类</a></li>
+              <li ><a href="/apps">影音类</a></li>
+              <li></li>
+            </ul>
+          </li>
+          <li class="">
+            <a href="">
+              <span>安全感知</span>
+            </a>
+          </li>
+          <li>
+            <a  id="exit">
+              <img src="../static/images/header-1.png" alt="">
+              <span>退出</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="mainbox2">
+    <ul class="clearfix">
+      <li>
+        <div class="boxall" style="height: calc(120% - .15rem); width: calc(100%);">
+          <div class="alltitle">TCP连接概览</div>
+          <div class="allnav" id="dbj" style="height: calc(100% - .15rem)"></div>
+          <div class="boxfoot"></div>
+        </div>
+      </li>
+
+      <li>
+        <div class="boxall", style="height: calc(120% - 0.15rem); width: calc(125% - 0.12rem);">
+          <div class="title" style="margin-left: -0.28rem;">
+            <h2>性能时间线</h2>
+            <p style="width: 2.6rem;">
+              <span class="span_c day_cl" onclick="cl1()", style="width: 0.8rem;">带宽使用</span>
+              <span class="month_cl" onclick="cl2()", style="width: 0.8rem;">延迟趋势</span>
+              <span class="month_cl" onclick="cl2()", style="width: 0.8rem;">重传事件</span>
+            </p>
+          </div>
+          <div class="boxnav" id="echart3"></div>
+          <div class="boxfoot"></div>
+        </div>
+      </li>
+    </ul>
+    <ul>
+      <li>
+        <div class="boxall", style="height: calc(225%); width: calc(202%);margin-top: 0.6rem;">
+          <div class="alltitle">TCP连接详情</div>
+          <div class="statusList">
+            <ul class="seTable">
+              <li>源IP</li>
+              <li>目的IP</li>
+              <li>源端口</li>
+              <li>目的端口</li>
+              <li>连接状态</li>
+              <li>传输字节</li>
+              <li>重传次数</li>
+              <li>RTT</li>
+              <li>带宽</li>
+              <li>创建时间</li>
+              <li>持续时间</li>
+              <li>包数量</li>
+              <li>窗口大小</li>
+              <li>协议类型</li>
+              <li>流量类型</li>
+            </ul>
+            <div id="orderItems" class="outlineBorder">
+              <ul class="rolling rolStyle"></ul>
+            </div>
+          </div>
+          <div class="boxfoot"></div>
+        </div>
+      </li>
+    </ul>
+  </div> 
+
+  <script language="JavaScript" src="../static/js/connection.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@x.x.x/dist/echarts.min.js"></script>
+  <script src="../static/js/jquery.liMarquee.js"></script>
+  <script>
+    document.getElementById('exit').addEventListener('click', function() {
+        window.location.href = 'https://www.google.com';
+    });
+</script>
+  <script>
+    $(function () {
+      $('.wrap,.adduser').liMarquee({
+        direction: 'up',//身上滚动 
+        runshort: false,//内容不足时不滚动
+        scrollamount: 20//速度
+      });
+    });
+
+  </script>
+</body>
+</html>

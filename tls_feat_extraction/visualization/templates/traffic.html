@@ -1,0 +1,361 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>可视化分析系统</title>
+  <script type="text/javascript" src="../static/js/jquery.js"></script>
+
+  <link rel="stylesheet" href="../static/css/comon0.css">
+  <link rel="stylesheet" href="../static/css/comon1.css">
+  <link rel="stylesheet" href="../static/css/button.css">
+</head>
+
+<body>
+  <div class="loading">
+    <div class="loadbox"> <img src="../static/images/loading.gif"> 页面加载中... </div>
+  </div>
+
+  <div class="content">
+    <div class="header">
+      <div class="header_l">
+        <ul>
+          <li class="">
+            <a href="/index">
+              <img src="../static/images/header-3.png" alt="">
+              <span>监控大屏</span>
+            </a>
+          </li>
+          <li class="sel_li">
+            <a href="">
+              <span>流量感知</span>
+            </a>
+            <ul class="dropdown-content">
+              <li><a href="">流量概要</a></li>
+              <li><a href="">协议分析</a></li>
+            </ul>
+          </li>
+          <li class="">
+            <a href="/npm">
+              <span>网络感知</span>
+            </a>
+            <ul class="dropdown-content">
+              <li><a href="/npm">性能概要</a></li>
+              <li><a href="/connection">连接性能</a></li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+      <div class="header_m">
+        <h1>应用态势感知分析系统</h1>
+      </div>
+      <div class="header_r">
+        <ul>
+          <li class="">
+            <a href="apps">
+              <span>应用感知</span>
+            </a>
+            <ul class="dropdown-content">
+              <li><a href="/apps">下载类</a></li>
+              <li><a href="/apps">Web类</a></li>
+              <li ><a href="/apps">影音类</a></li>
+              <li></li>
+            </ul>
+          </li>
+          <li class="">
+            <a href="">
+              <span>安全感知</span>
+            </a>
+          </li>
+          <li id="exit">
+            <a>
+              <img src="../static/images/header-1.png" alt="">
+              <span>退出</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="mainbox2">
+    <ul class="clearfix">
+      <li>
+        <div class="boxall" style="height: calc(120% - 0.15rem);">
+          <div class="title" style="margin-left: -0.22rem;">
+            <h2>数据总览</h2>
+            <p>
+              <span class="span_c day_cl" onclick="cl1()">近1小时</span>
+              <span class="month_cl" onclick="cl2()">近1天</span>
+              <span class="month_cl" onclick="cl2()">近7天</span>
+              <span class="month_cl" onclick="cl2()">近30天</span>
+              <span class="month_cl" onclick="cl2()">近1年</span>
+              <span class="month_cl" onclick="cl2()">今日</span>
+              <span class="month_cl" onclick="cl2()">本周</span>
+              <span class="month_cl" onclick="cl2()">本月</span>
+            </p>
+            <!-- <button id="date1"></button> -->
+          </div>
+
+          <div class="sycmm">
+            <ul class="clearfix">
+              <li>
+                <h2>675</h2> <span>总流量(MB)</span>
+              </li>
+              <li>
+                <h2>338</h2> <span>入站流量</span>
+              </li>
+              <li>
+                <h2>337</h2> <span>出站流量</span>
+              </li>
+            </ul>
+            <ul class="clearfix">
+              <li>
+                <h2>345,333</h2> <span>总数据包数</span>
+              </li>
+              <li>
+                <h2>33</h2> <span>总流数</span>
+              </li>
+              <li>
+                <h2>123</h2> <span>总协议数</span>
+              </li>
+            </ul>
+          </div>
+          <div class="boxfoot"></div>
+        </div>
+        <div class="boxall" , style="height: calc(100% - 0.15rem);">
+          <div class="alltitle title2">
+            数据包分类
+          </div>
+          <ul class="tabnav">
+            <li>
+              <div class="gdhead">
+                <span>数据包类型</span>
+                <span>数据包数 </span>
+                <span>占总数据包百分比</span>
+                <span>参考值</span>
+              </div>
+              <div class="scrollDiv">
+                <ul class="smjl">
+                  <li><span>广播包</span><span>0</span><span>0%</span><span>&lt10.00%</span>
+                  </li>
+                  <li><span>组播包</span><span>3</span><span>0.01%</span><span>&lt10.00%</span>
+                  </li>
+                  <li><span>ARP包</span><span>3</span><span>0%</span><span>&lt3.00%</span>
+                  </li>
+                  <li><span>ICMP包</span><span>42</span><span>0.09%</span><span>&lt3.00%</span>
+                  </li>
+                </ul>
+              </div>
+            </li>
+          </ul>
+          <div class="boxfoot"></div>
+        </div>
+        <div class="boxall" , style="height: calc(130% - 0.15rem);">
+          <div class="alltitle title2">
+            TCP数据包分类
+          </div>
+          <ul class="tabnav">
+            <li>
+              <div class="gdhead">
+                <span>TCP数据包类型</span>
+                <span>数据包数 </span>
+                <span>百分比</span>
+                <span>参考值</span>
+              </div>
+              <div class="scrollDiv">
+                <ul class="smjl">
+                  <li><span>TCP同步包</span><span>73</span><span>0.17%</span><span>&lt10.00%</span>
+                  </li>
+                  <li><span>TCP同步确认包</span><span>66</span><span>90.41%</span><span>&ge; 80% </span>
+                  </li>
+                  <li><span>TCP重置包</span><span>21</span><span>28.77%</span><span>&lt20.00%</span>
+                  </li>
+                  <li><span>TCP重传包</span><span>4</span><span>0.02%</span><span>&lt10.00%</span>
+                  </li>
+                  <li><span>TCP紧急包</span><span>2</span><span>0.01%</span><span>&lt20.00%</span>
+                  </li>
+                  <li><span>TCP推送包</span><span>2</span><span>0.01%</span><span>&lt20.00%</span>
+                  </li>
+                </ul>
+              </div>
+            </li>
+          </ul>
+          <div class="boxfoot"></div>
+        </div>
+
+      </li>
+
+      <li>
+        <div class="boxall" , style="height: calc(80% - 0.15rem); width: calc(125% - 0.15rem);">
+          <div class="alltitle title2">
+            IP流量分类
+          </div>
+          <ul class="tabnav">
+            <li>
+              <div class="gdhead">
+                <span>IP流量类型</span>
+                <span>字节数 </span>
+                <span>占IP流量百分比</span>
+                <span>参考值</span>
+              </div>
+              <div class="scrollDiv">
+                <ul class="smjl">
+                  <li><span>单播流量</span><span>31.00MB</span><span>100%</span><span>&ge; 90.00%</span>
+                  </li>
+                  <li><span>广播流量</span><span>0B</span><span>0%</span><span>&lt5.00%</span>
+                  </li>
+                  <li><span>组播流量</span><span>168B</span><span>0%</span><span>&lt5.00%</span>
+                  </li>
+                </ul>
+              </div>
+            </li>
+          </ul>
+          <div class="boxfoot"></div>
+        </div>
+        <div class="boxall" , style="height: calc(125% - 0.15rem);  width: calc(125% - 0.15rem); ">
+          <div class="alltitle title2">
+            数据包分类
+          </div>
+          <ul class="tabnav">
+            <li>
+              <div class="gdhead">
+                <span>数据包大小</span>
+                <span>数据包数 </span>
+                <span>占总数据包百分比</span>
+                <span>参考值</span>
+              </div>
+              <div class="scrollDiv">
+                <ul class="smjl">
+                  <li><span> &le; 64</span><span>14757</span><span>30.58%</span><span>&lt40.00%</span>
+                  </li>
+                  <li><span>65-127</span><span>8268</span><span>17.13%</span><span>&gt;10.00%</span>
+                  </li>
+                  <li><span>128-255</span><span>4817</span><span>9.98%</span><span>5-20.00%</span>
+                  </li>
+                  <li><span>256-1023</span><span>1979</span><span>3.72%</span><span>&lt20.00%</span>
+                  </li>
+                  <li><span>1024-1517</span><span>17376</span><span>35.98%</span><span>&gt;30.00%</span>
+                  </li>
+                  <li><span>&ge; 1518</span><span>0</span><span>0%</span><span>&lt3.00%</span>
+                  </li>
+                </ul>
+              </div>
+            </li>
+          </ul>
+          <div class="boxfoot"></div>
+        </div>
+        <div class="boxall" , style="height: calc(65% - 0.15rem);  width: calc(125% - 0.15rem); ">
+          <div class="alltitle title2">
+            流量分类
+          </div>
+          <ul class="tabnav">
+            <li>
+              <div class="gdhead">
+                <span>流量类型</span>
+                <span>字节数 </span>
+                <span>占总流量百分比</span>
+                <span>参考值</span>
+              </div>
+              <div class="scrollDiv">
+                <ul class="smjl">
+                  <li><span>IP流量</span><span>31MB</span><span>100%</span><span>&ge; 90.00%</span>
+                  </li>
+                  <li><span>非IP流量</span><span>342B</span><span>0%</span><span>&le;10% </span>
+                  </li>
+                </ul>
+              </div>
+            </li>
+          </ul>
+          <div class="boxfoot"></div>
+        </div>
+
+        <div class="boxall" , style="height: calc(80% - 0.15rem); width: calc(125% - 0.15rem);">
+          <div class="alltitle title2">
+            非IP流量分类
+          </div>
+          <ul class="tabnav">
+            <li>
+              <div class="gdhead">
+                <span>非IP流量类型</span>
+                <span>字节数 </span>
+                <span>占非IP流量百分比</span>
+                <span>参考值</span>
+              </div>
+              <div class="scrollDiv">
+                <ul class="smjl">
+                  <li><span>单播流量</span><span>31.00MB</span><span>100%</span><span>&ge; 90.00%</span>
+                  </li>
+                  <li><span>广播流量</span><span>0B</span><span>0%</span><span>&lt5.00%</span>
+                  </li>
+                  <li><span>组播流量</span><span>168B</span><span>0%</span><span>&lt5.00%</span>
+                  </li>
+                </ul>
+              </div>
+            </li>
+          </ul>
+          <div class="boxfoot"></div>
+        </div>
+      </li>
+
+      <li>
+        <div class="map"; style="margin-left: 10.8rem; margin-top: -2.5rem; ">
+          <div class="map4" id="map_1">
+            <div class="map1">
+              <img src="../static/images/lbx.png" />
+            </div>
+            <div class="map2">
+              <img src="../static/images/jt.png" />
+            </div>`
+            <div class="map3">
+              <img src="../static/images/map.png" />
+            </div>
+          </div>
+        </div>
+      </li>
+    </ul>
+  </div>
+
+
+  <script>
+    $(window).load(function () {
+      $(".loading").fadeOut()
+    })
+
+    /****/
+    $(document).ready(function () {
+      var whei = $(window).width()
+      $("html").css({ fontSize: whei / 20 })
+      $(window).resize(function () {
+        var whei = $(window).width()
+        $("html").css({ fontSize: whei / 20 })
+      });
+    })
+  </script>
+  <script src="../static/js/moment.js"></script>
+  <script src="../static/js/moment.min.js"></script>
+  <script src="../static/js/daterangepicker.js"></script>
+  <!-- <script src="js/date.js"></script> -->
+  <!-- <script src="js/js.js"></script> -->
+  <script src="../static/js/selectdata.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@x.x.x/dist/echarts.min.js"></script>
+  <script src="../static/js/jquery.liMarquee.js"></script>
+  <script>
+    document.getElementById('exit').addEventListener('click', function() {
+        window.location.href = 'https://www.google.com';
+    });
+</script>
+  <!-- <script>
+    $(function () {
+      $('.wrap,.adduser').liMarquee({
+        direction: 'up',//身上滚动 
+        runshort: false,//内容不足时不滚动
+        scrollamount: 20//速度
+      });
+    });
+
+  </script> -->
+
+</body>
+
+</html>

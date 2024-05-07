@@ -1,0 +1,211 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>可视化分析系统</title>
+  <script type="text/javascript" src="../static/js/jquery.js"></script>
+
+  <link rel="stylesheet" href="../static/css/comon0.css">
+  <link rel="stylesheet" href="../static/css/comon1.css">
+  <link rel="stylesheet" href="../static/css/button.css">
+</head>
+
+<body>
+  <div class="loading">
+    <div class="loadbox"> <img src="../static/images/loading.gif"> 页面加载中... </div>
+  </div>
+
+  <div class="content">
+    <div class="header">
+      <div class="header_l">
+        <ul>
+          <li class="">
+            <a href="/index">
+              <img src="../static/images/header-3.png" alt="">
+              <span>监控大屏</span>
+            </a>
+          </li>
+          <li class="">
+            <a href="/traffic">
+              <span>流量感知</span>
+            </a>
+            <ul class="dropdown-content">
+              <li><a href="/traffic">流量概要</a></li>
+              <li><a href="/traffic">协议分析</a></li>
+            </ul>
+          </li>
+          <li class="sel_li">
+            <a href="">
+              <span>网络感知</span>
+            </a>
+            <ul class="dropdown-content">
+              <li><a href="">性能概要</a></li>
+              <li><a href="/connection">连接性能</a></li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+      <div class="header_m">
+        <h1>应用态势感知分析系统</h1>
+      </div>
+      <div class="header_r">
+        <ul>
+          <li class="">
+            <a href="apps">
+              <span>应用感知</span>
+            </a>
+            <ul class="dropdown-content">
+              <li><a href="/apps">下载类</a></li>
+              <li><a href="/apps">Web类</a></li>
+              <li ><a href="/apps">影音类</a></li>
+              <li></li>
+            </ul>
+          </li>
+          <li class="">
+            <a href="">
+              <span>安全感知</span>
+            </a>
+          </li>
+          <li id="exit">
+            <a>
+              <img src="../static/images/header-1.png" alt="">
+              <span>退出</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="mainbox2">
+    <ul class="clearfix" , style="margin-top: -0.15rem;">
+      <li>
+        <div class="boxall", style="height: calc(120% - 0.15rem);">
+          <div class="title" style="margin-left: -0.28rem;">
+            <h2>CPU使用率</h2>
+            <p>
+              <span class="span_c day_cl" onclick="cl1()">近1小时</span>
+              <span class="month_cl" onclick="cl2()">近1天</span>
+              <span class="month_cl" onclick="cl2()">近7天</span>
+              <span class="month_cl" onclick="cl2()">近30天</span>
+              <span class="month_cl" onclick="cl2()">近1年</span>
+              <span class="month_cl" onclick="cl2()">今日</span>
+              <span class="month_cl" onclick="cl2()">本周</span>
+              <span class="month_cl" onclick="cl2()">本月</span>
+            </p>
+          </div>
+          <div class="boxnav" id="echart3"></div>
+          <div class="boxfoot"></div>
+        </div>
+      </li>
+      
+
+      <li>
+        <div class="boxall" , style="width:calc(125% - 0.1rem);height: calc(120% - 0.15rem);">
+          <div class="alltitle title2", style="font-size: 0.16rem;">
+            <h2>内存使用率</h2>
+          </div>
+          <div class="boxnav" id="echart4"></div>
+          <div class="boxfoot"></div>
+        </div>
+      </li>
+
+      <li>
+        <div class="boxall", style="height: calc(120% - 0.15rem);margin-top: 0.55rem;">
+          <div class="alltitle title2", style="font-size: 0.16rem;">
+            <h2>系统负载</h2>
+          </div>
+          <div class="boxnav" id="echart1"></div>
+          <div class="boxfoot"></div>
+        </div>
+      </li>
+
+      <li>
+        <div class="boxall" , style="height: calc(120% - 0.15rem);margin-top: 0.55rem;margin-left: -0.1rem;">
+          <div class="alltitle title2", style="font-size: 0.16rem;">
+            <h2>响应时间</h2>
+          </div>
+          <div class="boxnav" id="echart2"></div>
+          <div class="boxfoot"></div>
+        </div>
+      </li>
+
+
+      <li>
+        <div class="boxall", style="height: calc(120% - 0.15rem);margin-top: 1.1rem;">
+          <div class="alltitle title2", style="font-size: 0.16rem;">
+            <h2>吞吐量</h2>
+          </div>
+          <div class="boxnav" id="echart5"></div>
+          <div class="boxfoot"></div>
+        </div>
+      </li>
+
+      <li>
+        <div class="boxall", style="height: calc(120% - 0.15rem);margin-top: 1.1rem;margin-left: -0.1rem;">
+          <div class="alltitle title2", style="font-size: 0.16rem;">
+            <h2>网络带宽</h2>
+          </div>
+          <div class="boxnav" id="echart6"></div>
+          <div class="boxfoot"></div>
+        </div>
+      </li>
+      <li>
+        <div class="map" , style="margin-left: 10.8rem; margin-top: -8rem; ">
+          <div class="map4" ,id="map_1">
+            <div class="map1">
+              <img src="../static/images/lbx.png" />
+            </div>
+            <div class="map2">
+              <img src="../static/images/jt.png" />
+            </div>`
+            <div class="map3">
+              <img src="../static/images/map.png" />
+            </div>
+          </div>
+        </div>
+      </li>
+    </ul>
+  </div>
+
+
+  <script>
+    $(window).load(function () {
+      $(".loading").fadeOut()
+    })
+
+    /****/
+    $(document).ready(function () {
+      var whei = $(window).width()
+      $("html").css({ fontSize: whei / 20 })
+      $(window).resize(function () {
+        var whei = $(window).width()
+        $("html").css({ fontSize: whei / 20 })
+      });
+    })
+  </script>
+  <script src="../static/js/daterangepicker.js"></script>
+  <script src="../static/js/trend.js"></script>
+  <script src="../static/js/selectdata.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@x.x.x/dist/echarts.min.js"></script>
+  <script src="../static/js/jquery.liMarquee.js"></script>
+  <script>
+    document.getElementById('exit').addEventListener('click', function () {
+      window.location.href = 'https://www.google.com';
+    });
+  </script>
+  <!-- <script>
+    $(function () {
+      $('.wrap,.adduser').liMarquee({
+        direction: 'up',//身上滚动 
+        runshort: false,//内容不足时不滚动
+        scrollamount: 20//速度
+      });
+    });
+
+  </script> -->
+
+</body>
+
+</html>

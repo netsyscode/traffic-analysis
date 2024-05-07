@@ -1,0 +1,107 @@
+.statusList {
+ 	width: 100%;
+ 	margin: 0 auto;
+ 	margin-top: 5px;
+ }
+
+.statusList .seTable {
+	width: 100%;
+	padding-bottom: 0px;
+	display:  flex;
+}
+
+.statusList .seTable li {
+	width: 100%;
+	font-size: 0.2rem;
+	color: #66dffb;
+	background: #154d8d;
+	padding: 10px 0;
+	margin-right: 3px;
+    margin-left: 3px;
+	text-align:  center;
+}
+
+.statusList .outlineBorder ul {
+	height: 45px;
+}
+.statusList .outlineBorder ul li:nth-child(odd) {
+	color: #3e90f7;
+}
+.statusList .outlineBorder ul li:nth-child(even) {
+	color: #8ec0ff;
+}
+
+.statusList .outlineBorder ul li {
+    float: left; /* 如无必要，建议去除，因为Flexbox提供了更好的布局选项 */
+    width: 6.6%;
+    min-height: 40px; /* 使用min-height而不是height以容纳多行文本 */
+    display: flex;
+    flex-direction: column; /* 使子元素按列排列 */
+    justify-content: center; /* 垂直居中 */
+    text-align: center; /* 水平居中 */
+    font-size: 0.18rem!important;
+    overflow-wrap: break-word; /* 允许在单词内断行 */
+    word-wrap: break-word; /* 较老的浏览器可能需要这个 */
+    word-break: break-word; /* 在需要时断开单词以防止溢出 */
+}
+
+
+
+/* 无缝滚动  */
+@-webkit-keyframes scrollText1 {
+	0%{
+		-webkit-transform: translateY(0px);
+	}
+	20%{
+		-webkit-transform: translateY(-45px);
+	}
+	40%{
+		-webkit-transform: translateY(-90px);
+	}
+	60%{
+		-webkit-transform: translateY(-135px);
+	}
+	80%{
+		-webkit-transform: translateY(-180px);
+	}
+	100%{
+		-webkit-transform: translateY(-225px);
+	}
+}
+
+@keyframes scrollText1 {
+	0%{
+		-webkit-transform: translateY(0px);
+	}
+	20%{
+		-webkit-transform: translateY(-45px);
+	}
+	40%{
+		-webkit-transform: translateY(-90px);
+	}
+	60%{
+		-webkit-transform: translateY(-135px);
+	}
+	80%{
+		-webkit-transform: translateY(-180px);
+	}
+	100%{
+		-webkit-transform: translateY(-225px);
+	}
+}
+.outlineBorder {
+	position: relative;
+	width: 100%;
+	overflow: hidden;
+	height: 400px;
+}
+.rolling {
+	top: 0px;
+	-webkit-animation:scrollText1 10s infinite  cubic-bezier(1, 0, 0.5, 0);
+	animation:scrollText1 10s infinite  cubic-bezier(1, 0, 0.5, 0);
+}
+
+.outlineBorder:hover  .rolling {
+	animation-play-state:paused;
+	-webkit-animation-play-state:paused;
+}

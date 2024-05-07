@@ -12,7 +12,7 @@ void Flow::terminate(bool download_flag)
 {
     // 包间特征
     PacketsFeature packetsFeature;
-    packetsFeature.app_label = stoi(app_label);
+    // packetsFeature.app_label = app_label;
     
     packetsFeature.max_packet_size = max_packet_size;
     packetsFeature.min_packet_size = min_packet_size;
@@ -123,7 +123,7 @@ void Flow::terminate(bool download_flag)
         }
     }
 
-    flowFeature.app_label = stoi(app_label);
+    flowFeature.app_label = flow2app[{key.srcIP.toString(), key.dstIP.toString(), key.srcPort, key.dstPort}];
     flowFeature.startts = nanosecondsToDatetime(start_timestamp);
     flowFeature.srcIP = flowKey.srcIP.toString();
     flowFeature.dstIP = flowKey.dstIP.toString();
@@ -134,7 +134,11 @@ void Flow::terminate(bool download_flag)
     flowFeature.max_size_of_packet = max_packet_size;
     flowFeature.min_size_of_packet = min_packet_size;
 
-    data.flowFeatureVector->push_back(flowFeature);
+    // 所有是txt文件有对应的应用的流才写入数据库
+    if(flowFeature.app_label != ""){
+        // std::cout << key.srcIP.toString() << " " << key.dstIP.toString() << " " << key.srcPort << " " << key.dstPort << " " << flowFeature.app_label << std::endl;
+        data.flowFeatureVector->push_back(flowFeature);
+    }
 }
 
 Flow::Flow(FlowKey flowKey)//构造函数
@@ -216,7 +220,6 @@ bool FlowKey::operator==(const FlowKey& e) const
 	return (this->srcIP == e.srcIP) && (this->dstIP == e.dstIP) && 
 		(this->srcPort == e.srcPort) && (this->dstPort == e.dstPort);
 }
-
 
 std::pair<IPAddress, IPAddress> getIPs(const Packet* packet)
 {

@@ -9,7 +9,7 @@ typedef long long LL;
 struct FlowFeature
 {
 	TLSFingerprint* tlsFingerprint = nullptr;
-	int app_label = 0;
+	std::string app_label = "";
 	std::string start_timestamp = "";
 	std::string srcIP, dstIP;
 	uint16_t srcPort = 0, dstPort = 0;
@@ -32,7 +32,7 @@ struct FlowFeature
 
 // 流间特征
 struct FlowsFeature {
-	int app_label = 0;
+	std::string app_label = "";
 	std::pair<std::map<std::string, int>, std::map<std::string, int>> flow_of_same_ip;
 	std::pair<std::map<u_int16_t, int>, std::map<u_int16_t, int>> flow_of_same_port;
     int max_active_flow_count;
@@ -97,7 +97,7 @@ struct HttpResponse
 };
 
 struct ProtocolInfo {
-	int app_label = 0;
+	std::string app_label = "";
     std::string mac_source = "00:00:00:00:00:00";
 	std::string mac_destination = "00:00:00:00:00:00";
     uint16_t ethernet_type = 0; 
@@ -139,7 +139,7 @@ struct ProtocolInfo {
 
 struct SinglePacketInfo
 {
-	int app_label = 0;
+	std::string app_label = "";
 	size_t payload_size = 0;
 	double payload_entropy = 0.0;
 	int packet_length = 0;
@@ -148,7 +148,7 @@ struct SinglePacketInfo
 
 struct PacketsFeature
 {
-	int app_label = 0;
+	std::string app_label = "";
 	double avg_packet_size = 0.0;
 	uint32_t median_packet_size = 0;
 	int max_packet_size = 0;

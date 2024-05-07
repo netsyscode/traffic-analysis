@@ -13,28 +13,10 @@
 #include <cppconn/prepared_statement.h>
 #include <ctime>
 #include <iomanip>
-#include "predict.h"
+// #include "predict.h"
 #include "tls_features.h"
 #include "global.h"
 #include <climits>
-
-HandlePacketData data;
-FlowsFeature flowsFeature;
-std::string app_label;
-
-bool isDownloadSessions(const FlowKey key, const LL &payload_size); 
-void calculateFlowsFeature(const HandlePacketData* data);
-void insertFlowFeatureIntoMySQL(const std::vector<FlowFeature>& features, std::unique_ptr<sql::Connection>& con);
-void insertProtocolFeatureIntoMySQL(const std::vector<ProtocolInfo>& data, std::unique_ptr<sql::Connection>& con);
-void insertPacketFeatureIntoMySQL(const std::vector<SinglePacketInfo>& data, std::unique_ptr<sql::Connection>& con);
-void insertPacketsFeatureIntoMySQL(const std::vector<PacketsFeature>& features, std::unique_ptr<sql::Connection>& con);
-void insertFlowsFeatureIntoMySQL(const FlowsFeature& flowsFeature, std::unique_ptr<sql::Connection>& con);
-void insertHttpRequestIntoMySQL(const std::vector<HttpRequest>& requests, std::unique_ptr<sql::Connection>& con);
-std::pair<std::map<u_int16_t, int>, std::map<u_int16_t, int>> countFlowsByPorts(const HandlePacketData* data);
-std::pair<std::map<std::string, int>, std::map<std::string, int>> countFlowsByIP(const HandlePacketData* data);
-std::vector<double> calculatePercentiles(const std::vector<double>& a);
-std::vector<double> getFlowsValues(const HandlePacketData* data, const char fieldName[]);
-std::map<std::string, std::string> readConfig(const std::string& configFile); 
 
 static struct option TLSFingerprintingOptions[] =
 {
@@ -42,7 +24,7 @@ static struct option TLSFingerprintingOptions[] =
 	{"input-file",  required_argument, 0, 'r'},
 	{"output-file", required_argument, 0, 'o'},
 	{"filter", required_argument, 0, 'f'},
-	{"app_label", required_argument, 0, 'l'},
+	{"user_label", required_argument, 0, 'l'},
 	{0, 0, 0, 0}
 };
 
@@ -54,6 +36,75 @@ static struct option TLSFingerprintingOptions[] =
 bool isNotAlphanumeric(char c)
 {
 	return std::isalnum(c) == 0;
+}
+
+HandlePacketData data;
+FlowsFeature flowsFeature;
+std::map<FlowKey, std::string> flow2app;
+std::string user_label;
+
+bool isDownloadSessions(const FlowKey key, const LL &payload_size); 
+void calculateFlowsFeature(const HandlePacketData* data);
+void insertFlowFeatureIntoMySQL(const std::vector<FlowFeature>& features, std::unique_ptr<sql::Connection>& con, const std::string& captureTime);
+void insertProtocolFeatureIntoMySQL(const std::vector<ProtocolInfo>& data, std::unique_ptr<sql::Connection>& con);
+void insertPacketFeatureIntoMySQL(const std::vector<SinglePacketInfo>& data, std::unique_ptr<sql::Connection>& con);
+void insertPacketsFeatureIntoMySQL(const std::vector<PacketsFeature>& features, std::unique_ptr<sql::Connection>& con);
+void insertFlowsFeatureIntoMySQL(const FlowsFeature& flowsFeature, std::unique_ptr<sql::Connection>& con);
+void insertHttpRequestIntoMySQL(const std::vector<HttpRequest>& requests, std::unique_ptr<sql::Connection>& con);
+std::pair<std::map<u_int16_t, int>, std::map<u_int16_t, int>> countFlowsByPorts(const HandlePacketData* data);
+std::pair<std::map<std::string, int>, std::map<std::string, int>> countFlowsByIP(const HandlePacketData* data);
+std::vector<double> calculatePercentiles(const std::vector<double>& a);
+std::vector<double> getFlowsValues(const HandlePacketData* data, const char fieldName[]);
+std::map<std::string, std::string> readConfig(const std::string& configFile); 
+
+// 解析IP地址和端口号
+void parseIPAndPort(const std::string& ip_port_str, std::string& ip, u_int16_t& port) {
+    std::istringstream ip_port_tokens(ip_port_str);
+    std::getline(ip_port_tokens, ip, ':');
+    std::string port_str;
+    std::getline(ip_port_tokens, port_str, ':');
+    port = std::stoi(port_str);
+}
+
+// 从文件路径中读取数据并返回字典
+std::map<FlowKey, std::string> readTxtFile(const std::string& filepath) {
+	std::string txtPath = filepath.substr(0, filepath.length() - 5) + "_log.txt";
+	std::cout << "Start reading '" << txtPath << "'..." << std::endl;
+    std::map<FlowKey, std::string> result;
+    std::ifstream file(txtPath); // 打开文件
+    std::string line;
+
+    // 逐行读取文件内容
+    while (std::getline(file, line)) {
+        std::istringstream iss(line);
+        std::vector<std::string> tokens;
+        std::string token;
+
+		// 用逗号作为分隔符，将每行内容分割成不同的字段
+        while (std::getline(iss, token, ',')) {
+            // 移除字段中可能存在的空格
+            token.erase(std::remove(token.begin(), token.end(), ' '), token.end());
+            tokens.push_back(token);
+        }
+		if(tokens[2] == "TCP6")
+			continue;
+
+        // 检查字段数量是否符合预期
+        if (tokens.size() == 4) {
+            std::string src_ip, dst_ip, src_port_str, dst_port_str;
+            u_int16_t src_port, dst_port;
+
+ 			// 解析源IP和目的IP
+            parseIPAndPort(tokens[3], src_ip, src_port);
+            parseIPAndPort(tokens[3].substr(tokens[3].find(">")+2), dst_ip, dst_port);
+
+            FlowKey flowkey{src_ip, dst_ip, src_port, dst_port};
+			FlowKey key{dst_ip, src_ip, dst_port, src_port};
+			result[key] = tokens[1];
+            result[flowkey] = tokens[1];
+        }
+    }
+    return result;
 }
 
 /**
@@ -233,51 +284,52 @@ void calculateFlowFeature(const HandlePacketData* data)
 	}
 }
 
+
 /**
  * @brief 将流进行分类
  * @param data 包含所有流的信息
  * @param model SVM分类器
  */
-void classficationFlows(const HandlePacketData* data, SVMPredictor* model)
-{
-	auto flows = *(data->flows);
-	if (flows.size() > 0)
-	{
-		// iterate over all items in the map and print them
-		for(auto iter = flows.begin(); iter != flows.end(); iter++)
-		{
-			FlowKey flowKey = iter->first;
-			Flow* flow = iter->second;
-			const FlowFeature* flowFeature = &(flow->flowFeature);
-			std::vector<double> x(24, 0.0);
-			x[0] = flowKey.srcPort;
-			x[1] = flowKey.dstPort;
-			if (flowFeature->tlsFingerprint != NULL) {
-				auto clientDigest = flowFeature->tlsFingerprint->clientHelloFingerprint.toDigest().digest;
-				auto serverDigest = flowFeature->tlsFingerprint->serverHelloFingerprint.toDigest().digest;
-				for (size_t i = 0; i < 5; i++)
-					x[2+i] =  (u_int32_t) clientDigest[i] ;
-				for (size_t i = 0; i < 3; i++)
-					x[7+i] =  (u_int32_t) serverDigest[i] ;
-			} else {
-				for (size_t i = 0; i < 8; i++)
-					x[2+i] = 0;
-			}
-			x[10] = flowFeature->bw;
-			x[11] = flowFeature->itvl;
-			x[12] = flowFeature->pktlen;
-			x[14] = flowFeature->ave_pkt_size_under_300;
-			x[15] = flowFeature->ave_pkt_size_over_1000;
-			x[18] = flowFeature->udp_nopayload_rate;
-			x[19] = flowFeature->ave_rtt;
-			x[23] = flowFeature->ret_rate; // ???
-			std::pair<int, double> temp = model->predictForPredictedClass(x);
-			//flow->flowFeature.res = temp.first;
-			//flow->flowFeature.dis = temp.second;
-			std::cout << flowKey.srcIP << " "<< flowKey.dstIP << "   "<< temp.first  << "   "<< temp.second << std::endl;
-		}
-	}
-}
+// void classficationFlows(const HandlePacketData* data, SVMPredictor* model)
+// {
+// 	auto flows = *(data->flows);
+// 	if (flows.size() > 0)
+// 	{
+// 		// iterate over all items in the map and print them
+// 		for(auto iter = flows.begin(); iter != flows.end(); iter++)
+// 		{
+// 			FlowKey flowKey = iter->first;
+// 			Flow* flow = iter->second;
+// 			const FlowFeature* flowFeature = &(flow->flowFeature);
+// 			std::vector<double> x(24, 0.0);
+// 			x[0] = flowKey.srcPort;
+// 			x[1] = flowKey.dstPort;
+// 			if (flowFeature->tlsFingerprint != NULL) {
+// 				auto clientDigest = flowFeature->tlsFingerprint->clientHelloFingerprint.toDigest().digest;
+// 				auto serverDigest = flowFeature->tlsFingerprint->serverHelloFingerprint.toDigest().digest;
+// 				for (size_t i = 0; i < 5; i++)
+// 					x[2+i] =  (u_int32_t) clientDigest[i] ;
+// 				for (size_t i = 0; i < 3; i++)
+// 					x[7+i] =  (u_int32_t) serverDigest[i] ;
+// 			} else {
+// 				for (size_t i = 0; i < 8; i++)
+// 					x[2+i] = 0;
+// 			}
+// 			x[10] = flowFeature->bw;
+// 			x[11] = flowFeature->itvl;
+// 			x[12] = flowFeature->pktlen;
+// 			x[14] = flowFeature->ave_pkt_size_under_300;
+// 			x[15] = flowFeature->ave_pkt_size_over_1000;
+// 			x[18] = flowFeature->udp_nopayload_rate;
+// 			x[19] = flowFeature->ave_rtt;
+// 			x[23] = flowFeature->ret_rate; // ???
+// 			std::pair<int, double> temp = model->predictForPredictedClass(x);
+// 			//flow->flowFeature.res = temp.first;
+// 			//flow->flowFeature.dis = temp.second;
+// 			std::cout << flowKey.srcIP << " "<< flowKey.dstIP << "   "<< temp.first  << "   "<< temp.second << std::endl;
+// 		}
+// 	}
+// }
 
 /**
  * @brief 从pcap文件中提取TLS指纹
@@ -303,10 +355,10 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 	std::string fileNameWithoutExtension = pengdingPath.substr(fileNameOffset, extensionOffset - fileNameOffset);
 	outputFileName = outputPath + fileNameWithoutExtension + ".csv";
 
-	std::ofstream outputFile(outputFileName.c_str());
-	if (!outputFile){
-		EXIT_WITH_ERROR("Cannot open output file '" << outputFileName << "'");
-	}
+	// std::ofstream outputFile(outputFileName.c_str());
+	// if (!outputFile){
+	// 	EXIT_WITH_ERROR("Cannot open output file '" << outputFileName << "'");
+	// }
 
 	// write the column headers to the output file
 	//writeFlowFeatureHeaderToOutputFile(outputFile);
@@ -357,22 +409,22 @@ void doTlsFingerprintingOnPcapFile(const std::string& inputPcapFileName, std::st
 	delete reader;
 
 	calculateFlowFeature(&data);
-	calculateFlowsFeature(&data);
+	//calculateFlowsFeature(&data);
 
-	// 向数据库中写入数据
+	//向数据库中写入数据
 	try {
 		sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
 
 		//连接至数据库
 		auto config = readConfig("dbconfig.ini");
 		std::unique_ptr<sql::Connection> con(driver->connect(config["host"], config["user"], config["password"]));
-		con->setSchema("TrafficData");
-		// insertFlowFeatureIntoMySQL(flowFeatureVector, con);
+		con->setSchema("DisplayData");
+		insertFlowFeatureIntoMySQL(flowFeatureVector, con, user_label);
 		// insertProtocolFeatureIntoMySQL(protocolInfoVector, con);
 		// insertPacketFeatureIntoMySQL(singlePacketInfoVector, con);
 		// insertPacketsFeatureIntoMySQL(packetsFeatureVector, con);
 		// insertFlowsFeatureIntoMySQL(flowsFeature, con);
-		insertHttpRequestIntoMySQL(webRequestVector, con);
+		// insertHttpRequestIntoMySQL(webRequestVector, con);
 	}catch(std::exception &e){
 		std::cerr << e.what() << std::endl;
 	}
@@ -420,13 +472,12 @@ int main(int argc, char* argv[])
 				bpfFilter = optarg;
 				break;
 			case 'l':
-				app_label = optarg;
+				user_label = optarg;
 				break;
 			default:
 				exit(-1);
 		}
 	}
-
 
 	// if no interface or input pcap file provided or both are provided- exit with error
 	if (inputPcapFileName.empty() == interfaceNameOrIP.empty())
@@ -435,6 +486,10 @@ int main(int argc, char* argv[])
 	}
 	if (!inputPcapFileName.empty())
 	{
+		flow2app = readTxtFile(inputPcapFileName);
+		// for(auto a:flow2app){
+		// 	std::cout << a.first.srcPort << " " << a.second << std::endl;
+		// }
 		doTlsFingerprintingOnPcapFile(inputPcapFileName, outputFileName, bpfFilter, modelPath);
 	}
 }
@@ -482,7 +537,7 @@ bool isDownloadSessions(const FlowKey key, const LL &payload_size) {
 }
 
 void calculateFlowsFeature(const HandlePacketData* data){
-	flowsFeature.app_label = stoi(app_label);
+	// flowsFeature.app_label = app_label;
 	flowsFeature.max_active_flow_count = countActiveFlowsEveryFiveSeconds(data);
 	flowsFeature.flow_of_same_port = countFlowsByPorts(data);
 	flowsFeature.flow_of_same_ip = countFlowsByIP(data);

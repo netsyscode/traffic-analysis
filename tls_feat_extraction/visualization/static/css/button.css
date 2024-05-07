@@ -1,0 +1,110 @@
+
+ .mainbox2 ul  .title  {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  
+   .mainbox2 ul .title  h2 {
+    width: 1.9375rem;
+    font-size: 0.25rem;
+    font-family: SourceHanSansCN;
+    font-weight: 500;
+    color: #FFFFFF;
+    line-height: 0.6rem;
+    padding-left: 0.25rem;
+  }
+  
+   .mainbox2 ul .title  p {
+    width: 5.6rem;
+    height: 0.35rem;
+    background: rgba(75, 126, 254, 0.16);
+    border-radius: 0.175rem;
+    line-height: 0.35rem;
+    font-size: 0.16rem;
+    font-family: SourceHanSansCN;
+    font-weight: 400;
+    color: #FFFFFF;
+    margin-right: 0.3125rem;
+    margin-left: 0.0875rem;
+  }
+  
+   .mainbox2 ul .title  p span {
+    display: inline-block;
+    width: 0.65rem;
+    height: 0.35rem;
+    border-radius: 0.175rem;
+    text-align: center;
+  }
+  
+   .mainbox2 ul .title  p .span_c {
+    background-color: #4b7efe;
+  }
+  
+   .mainbox2 ul .title  button {
+    width: 1.4625rem;
+    height: 0.6rem;
+    background: url(../images/mainl-5.png) center no-repeat;
+    background-size: 100% 57%;
+    background-position: 0% 90%;
+    border: none;
+    cursor: pointer;
+    margin-right: 0.15rem;
+  }
+
+  .map {
+    position: relative;
+    z-index: 9;
+    background-image: none; /* 替换为实际的图片路径 */
+    background-repeat: no-repeat;
+  }
+  
+  .map4 {
+    width: 100%;
+    height: 6.5rem;
+    position: relative;
+    top: .3rem;
+    z-index: 5;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-image: none; /* 替换为实际的图片路径 */
+    background-size: 90%; /* 调整以符合原始 img 标签的宽度 */
+    background-repeat: no-repeat;
+    background-position: center;
+  }
+  
+  .map1, .map2, .map3 {
+    position: absolute;
+    background-size: cover;
+    background-repeat: no-repeat;
+  }
+  
+  .map1 {
+    width: 6.43rem;
+    z-index: 2;
+    top: .45rem;
+    left: .7rem;
+    animation: myfirst2 15s infinite linear;
+    background-image: url(../images/lbx.png); /* 替换为实际的图片路径 */
+  }
+  
+  .map2 {
+    width: 5.66rem;
+    top: .85rem;
+    left: 1.2rem;
+    z-index: 3;
+    opacity: 0.2;
+    animation: myfirst 10s infinite linear;
+    background-image: url(../images/jt.png); /* 替换为实际的图片路径 */
+  }
+  
+  .map3 {
+    width: 5.18rem;
+    top: 1.07rem;
+    left: 1.4rem;
+    z-index: 1;
+    background-image: url(../images/map.png); /* 替换为实际的图片路径 */
+  }
+  

@@ -113,6 +113,7 @@ extern LL timestamp_of_last_packet;
 extern std::vector<std::string> toString;
 
 std::string nanosecondsToDatetime(LL nanoseconds);
+
 double calculateAverage(std::vector<double>& vec);
 double calculateMedian(std::vector<double>& vec);
 double calculateStandardVariance(std::vector<double>& vec);

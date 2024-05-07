@@ -18,20 +18,19 @@ void insertProtocolFeatureIntoMySQL(const std::vector<ProtocolInfo>& features, s
         std::unique_ptr<sql::Statement> stmt(con->createStatement());
         stmt->execute("CREATE TABLE IF NOT EXISTS ProtocolFeatures ("
                       "id INT AUTO_INCREMENT PRIMARY KEY,"
-                      "app_label INT,"
-                      "mac_source VARCHAR(17), "
-                      "mac_destination VARCHAR(17), "
+                      "app_label VARCHAR(255),"
+                      "mac_source VARCHAR(255), "
+                      "mac_destination VARCHAR(255), "
                       "ethernet_type SMALLINT UNSIGNED, "
                       "vlan_id INT, "
                       "mpls_label INT UNSIGNED, "
                       "pppoe_session_id SMALLINT UNSIGNED, "
-                      "protocol_type VARCHAR(10), "
+                      "protocol_type VARCHAR(255), "
                       "ip_version VARCHAR(4), "
                       "ip_tos TINYINT UNSIGNED, "
                       "ip_header_checksum SMALLINT UNSIGNED, "
                       "ip_fragmentation_flag TINYINT UNSIGNED, "
                       "ip_identifier SMALLINT UNSIGNED, "
-                      // Skip ipv6_flow_label as it needs special handling
                       "ipv6_next_header TINYINT UNSIGNED, "
                       "wireless_network_ssid VARCHAR(32), "
                       "tcp_header_length SMALLINT UNSIGNED, "
@@ -63,7 +62,7 @@ void insertProtocolFeatureIntoMySQL(const std::vector<ProtocolInfo>& features, s
         // Bind data to the prepared statement
 		for (const auto& info : features) {
             int i = 1;
-            pstmt->setInt(i++, info.app_label);
+            pstmt->setString(i++, info.app_label);
 			pstmt->setString(i++, info.mac_source);
 			pstmt->setString(i++, info.mac_destination);
 			pstmt->setUInt(i++, info.ethernet_type);
@@ -116,7 +115,7 @@ void insertPacketFeatureIntoMySQL(const std::vector<SinglePacketInfo>& features,
         std::unique_ptr<sql::Statement> stmt(con->createStatement());
         stmt->execute("CREATE TABLE IF NOT EXISTS PacketFeatures ("
                       "id INT AUTO_INCREMENT PRIMARY KEY,"
-                      "app_label INT,"
+                      "app_label VARCHAR(255),"
                       "payload_size BIGINT,"
                       "payload_entropy DOUBLE,"
                       "packet_length INT,"
@@ -130,7 +129,7 @@ void insertPacketFeatureIntoMySQL(const std::vector<SinglePacketInfo>& features,
         // Iterate over each SinglePacketInfo object and insert it into the database
         for (const auto& packet : features) {
             int i = 1;
-            pstmt->setInt(i++, packet.app_label);
+            pstmt->setString(i++, packet.app_label);
             pstmt->setUInt64(i++, packet.payload_size); // Using setUInt64 for size_t
             pstmt->setDouble(i++, packet.payload_entropy);
             pstmt->setInt(i++, packet.packet_length);
@@ -160,7 +159,7 @@ void insertPacketsFeatureIntoMySQL(const std::vector<PacketsFeature>& features, 
         std::unique_ptr<sql::Statement> stmt(con->createStatement());
         stmt->execute("CREATE TABLE IF NOT EXISTS PacketsFeatures ("
                       "id INT AUTO_INCREMENT PRIMARY KEY,"
-                      "app_label INT,"
+                      "app_label VARCHAR(255),"
                       "avg_packet_size DOUBLE, "
                       "median_packet_size INT, "
                       "max_packet_size INT, "
@@ -190,7 +189,7 @@ void insertPacketsFeatureIntoMySQL(const std::vector<PacketsFeature>& features, 
                                           "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
         for(auto feature: features){                                 
             int i = 1;
-            pstmt->setInt(i++, feature.app_label);
+            pstmt->setString(i++, feature.app_label);
             pstmt->setDouble(i++, feature.avg_packet_size);
             pstmt->setUInt(i++, feature.median_packet_size);
             pstmt->setInt(i++, feature.max_packet_size);
@@ -231,7 +230,7 @@ void insertFlowsFeatureIntoMySQL(const FlowsFeature& flowsFeature, std::unique_p
         std::unique_ptr<sql::Statement> stmt(con->createStatement());
         stmt->execute("CREATE TABLE IF NOT EXISTS FlowsFeatures ("
             "id INT AUTO_INCREMENT PRIMARY KEY,"
-            "app_label INT,"
+            "app_label VARCHAR(255),"
             "max_active_flow_count INT,"
             "flow_duration_10 DOUBLE,"
             "flow_duration_25 DOUBLE,"
@@ -286,7 +285,7 @@ void insertFlowsFeatureIntoMySQL(const FlowsFeature& flowsFeature, std::unique_p
         payload_entropy_10, payload_entropy_25, payload_entropy_50, payload_entropy_75, payload_entropy_90) VALUES (?, ?, ?,\
         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
 
-        pstmt->setInt(1, flowsFeature.app_label);
+        pstmt->setString(1, flowsFeature.app_label);
         pstmt->setInt(2, flowsFeature.max_active_flow_count);
         // 从第三列开始
         int index = 3; 
@@ -311,64 +310,66 @@ void insertFlowsFeatureIntoMySQL(const FlowsFeature& flowsFeature, std::unique_p
  * @param features 包含单条流特征的vector
  * @param con 至Mysql数据库的连接
  */
-void insertFlowFeatureIntoMySQL(const std::vector<FlowFeature>& features, std::unique_ptr<sql::Connection>& con) {
-    try {
-        const char* createTableSQL = R"SQL(
-            CREATE TABLE IF NOT EXISTS FlowFeatures (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                app_label INT,
-                start_timestamp VARCHAR(255),
-                srcIP VARCHAR(255),
-                dstIP VARCHAR(255),
-                srcPort SMALLINT UNSIGNED,
-                dstPort SMALLINT UNSIGNED,
-                startts VARCHAR(255),
-                pktcnt INT,
-                client_TLS_version VARCHAR(255),
-                client_cipher_suite VARCHAR(255),
-                client_extensions VARCHAR(255),
-                client_supported_groups VARCHAR(255),
-                client_ecformat VARCHAR(255),
-                server_TLS_version VARCHAR(255),
-                server_cipher_suite VARCHAR(255),
-                server_extensions VARCHAR(255),
-                pktlen DOUBLE,
-                itvl DOUBLE,
-                bw DOUBLE,
-                dur DOUBLE,
-                ave_pkt_size_over_1000 DOUBLE,
-                ave_pkt_size_under_300 DOUBLE,
-                udp_nopayload_rate DOUBLE,
-                ret_rate DOUBLE,
-                ave_rtt DOUBLE,
-                bytes_of_flow BIGINT,
-                bytes_of_payload BIGINT,
-                header_of_packets BIGINT,
-                bytes_of_ret_packets BIGINT,
-                count_of_TCPpackets INT,
-                count_of_UDPpackets INT,
-                count_of_ICMPpackets INT,
-                max_size_of_packet INT,
-                min_size_of_packet INT,
-                end_to_end_latency DOUBLE,
-                avg_window_size DOUBLE,
-                avg_ttl DOUBLE,
-                avg_payload_size DOUBLE,
-                count_of_ret_packets INT,
-                count_of_syn_packets INT,
-                count_of_fin_packets INT,
-                count_of_rst_packets INT,
-                count_of_ack_packets INT,
-                count_of_psh_packets INT,
-                count_of_urg_packets INT,
-                entropy_of_payload DOUBLE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            )SQL";
+void insertFlowFeatureIntoMySQL(const std::vector<FlowFeature>& features, std::unique_ptr<sql::Connection>& con, const std::string& captureTime) {
+try {
         std::unique_ptr<sql::Statement> stmt(con->createStatement());
-        stmt->execute(createTableSQL);
+        // Create table for FlowFeature if it doesn't exist
+        stmt->execute("CREATE TABLE IF NOT EXISTS FlowFeatures_" + captureTime + R"SQL(
+                      (
+                          id INT AUTO_INCREMENT PRIMARY KEY,
+                          app_label VARCHAR(255),
+                          start_timestamp VARCHAR(255),
+                          srcIP VARCHAR(255),
+                          dstIP VARCHAR(255),
+                          srcPort SMALLINT UNSIGNED,
+                          dstPort SMALLINT UNSIGNED,
+                          pktcnt INT,
+                          client_TLS_version VARCHAR(255),
+                          client_cipher_suite VARCHAR(255),
+                          client_extensions VARCHAR(255),
+                          client_supported_groups VARCHAR(255),
+                          client_ecformat VARCHAR(255),
+                          server_TLS_version VARCHAR(255),
+                          server_cipher_suite VARCHAR(255),
+                          server_extensions VARCHAR(255),
+                          pktlen DOUBLE,
+                          itvl DOUBLE,
+                          bw DOUBLE,
+                          dur DOUBLE,
+                          ave_pkt_size_over_1000 DOUBLE,
+                          ave_pkt_size_under_300 DOUBLE,
+                          udp_nopayload_rate DOUBLE,
+                          ret_rate DOUBLE,
+                          ave_rtt DOUBLE,
+                          bytes_of_flow BIGINT,
+                          bytes_of_payload BIGINT,
+                          header_of_packets BIGINT,
+                          bytes_of_ret_packets BIGINT,
+                          count_of_TCPpackets INT,
+                          count_of_UDPpackets INT,
+                          count_of_ICMPpackets INT,
+                          max_size_of_packet INT,
+                          min_size_of_packet INT,
+                          end_to_end_latency DOUBLE,
+                          avg_window_size DOUBLE,
+                          avg_ttl DOUBLE,
+                          avg_payload_size DOUBLE,
+                          count_of_ret_packets INT,
+                          count_of_syn_packets INT,
+                          count_of_fin_packets INT,
+                          count_of_rst_packets INT,
+                          count_of_ack_packets INT,
+                          count_of_psh_packets INT,
+                          count_of_urg_packets INT,
+                          entropy_of_payload DOUBLE
+                      )
+                      ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+                  )SQL");
 
+
+        // Prepare the insert statement
         std::unique_ptr<sql::PreparedStatement> pstmt;
-        pstmt.reset(con->prepareStatement("INSERT INTO FlowFeatures (app_label, start_timestamp, srcIP, dstIP, srcPort, dstPort, startts, pktcnt, "
+        pstmt.reset(con->prepareStatement("INSERT INTO FlowFeatures_" + captureTime + " (app_label, start_timestamp, srcIP, dstIP, srcPort, dstPort, pktcnt, "
                                           "client_TLS_version, client_cipher_suite, client_extensions, client_supported_groups, client_ecformat, "
                                           "server_TLS_version, server_cipher_suite, server_extensions, pktlen, itvl, bw, dur, "
                                           "ave_pkt_size_over_1000, ave_pkt_size_under_300, udp_nopayload_rate, ret_rate, ave_rtt, "
@@ -377,17 +378,16 @@ void insertFlowFeatureIntoMySQL(const std::vector<FlowFeature>& features, std::u
                                           "max_size_of_packet, min_size_of_packet, end_to_end_latency, avg_window_size, avg_ttl, avg_payload_size, "
                                           "count_of_ret_packets, count_of_syn_packets, count_of_fin_packets, count_of_rst_packets, count_of_ack_packets, count_of_psh_packets, count_of_urg_packets, "
                                           "entropy_of_payload) "
-                                          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
+                                          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
 
         for(const auto& feature: features) {
             int i = 1;
-            pstmt->setInt(i++, feature.app_label);
-            pstmt->setString(i++, feature.start_timestamp);
+            pstmt->setString(i++, feature.app_label);
+            pstmt->setString(i++, feature.startts);
             pstmt->setString(i++, feature.srcIP);
             pstmt->setString(i++, feature.dstIP);
             pstmt->setUInt(i++, feature.srcPort);
             pstmt->setUInt(i++, feature.dstPort);
-            pstmt->setString(i++, feature.startts);
             pstmt->setInt(i++, feature.pktcnt);
             pstmt->setString(i++, feature.client_TLS_version);
             pstmt->setString(i++, feature.client_cipher_suite);
